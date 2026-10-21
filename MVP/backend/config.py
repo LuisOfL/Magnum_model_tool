@@ -7,29 +7,28 @@ MODEL_PATH = BASE_DIR / "best.pt"
 SEG_MODEL_PATH = BASE_DIR / "segmentation.pt"
 CLASSES_PATH = BASE_DIR / "classes.txt"
 
+# Capacidad máxima por SKU (Todos en 12)
 REGLAS_CAPACIDAD_TEXTO: Dict[str, int] = {
-    "mordisko": 11,
-    "mordizco": 11,
+    "mordisko": 12,
+    "mordizco": 12,
     "paleta": 12,
     "magnum": 12,
     "solero": 12,
-    "cornetto": 10,
-    "pint": 8,
+    "cornetto": 12,
+    "pint": 12,
     "DEFAULT": 12,
 }
 
-# PASO RECALIBRADO:
-# Se reduce la escala del paso para reflejar correctamente 
-# la diferencia de profundidad normalizada por unidad/paquete.
+# PASO DE PROFUNDIDAD EN CENTÍMETROS (2.0 cm por unidad)
 PASO_PROFUNDIDAD_POR_SKU: Dict[str, float] = {
-    "mordisko": 0.012,
-    "mordizco": 0.012,
-    "paleta": 0.015,
-    "magnum": 0.012,   # Con 0.0819 / 0.012 = ~7 faltantes calculados
-    "solero": 0.015,
-    "cornetto": 0.015,
-    "pint": 0.020,
-    "DEFAULT": 0.015,
+    "mordisko": 2.0,
+    "mordizco": 2.0,
+    "paleta": 2.0,
+    "magnum": 2.0,
+    "solero": 2.0,
+    "cornetto": 2.0,
+    "pint": 2.0,
+    "DEFAULT": 2.0,
 }
 
 REJILLA_KEYWORDS: Tuple[str, ...] = (

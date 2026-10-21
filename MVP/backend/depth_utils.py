@@ -6,15 +6,15 @@ from scipy.spatial import cKDTree
 from models import depth_estimator
 
 
-def calcular_mapa_profundidad(pil_img: Image.Image) -> np.ndarray:
-    """Genera el mapa de profundidad con Depth Anything V2 y lo escala a la imagen original."""
+def calcular_mapa_profundidad_cm(pil_img: Image.Image) -> np.ndarray:
     salida = depth_estimator(pil_img)
     predicted = salida.get("predicted_depth")
 
     if predicted is None:
         depth = np.asarray(salida["depth"], dtype=np.float32)
         depth_img = Image.fromarray(depth).resize(pil_img.size, Image.Resampling.BICUBIC)
-        return np.asarray(depth_img, dtype=np.float32)
+        depth_m = np.asarray(depth_img, dtype=np.float32)
+        return depth_m * 100.0
 
     if predicted.ndim == 2:
         predicted = predicted.unsqueeze(0).unsqueeze(0)
@@ -27,27 +27,28 @@ def calcular_mapa_profundidad(pil_img: Image.Image) -> np.ndarray:
         mode="bicubic",
         align_corners=False,
     )[0, 0]
-    return predicted.detach().cpu().numpy().astype(np.float32)
+
+    depth_tensor = predicted.detach().cpu().numpy().astype(np.float32)
+    
+    # CORRECCIÓN DE ESCALA: Mapear la salida relativa del modelo 
+    # a un rango físico coherente para un congelador (ej. entre 5 cm y 35 cm)
+    v_min, v_max = np.percentile(depth_tensor, [2, 98])
+    if v_max - v_min > 1e-6:
+        depth_normalizada = (depth_tensor - v_min) / (v_max - v_min)
+        # Invertir si el modelo da profundidad inversa y escalar a cm (máximo 30 cm de fondo)
+        depth_cm = (1.0 - depth_normalizada) * 25.0 + 5.0 
+    else:
+        depth_cm = np.zeros_like(depth_tensor) + 15.0
+
+    return depth_cm
 
 
-def normalizar_mapa_profundidad(depth: np.ndarray) -> np.ndarray:
-    """Normaliza el mapa de profundidad entre 0 y 1 ignorando valores atípicos."""
-    validos = depth[np.isfinite(depth)]
-    if validos.size == 0:
-        return np.zeros_like(depth, dtype=np.float32)
-    minimo, maximo = np.percentile(validos, [2, 98])
-    rango = float(maximo - minimo)
-    if rango < 1e-6:
-        return np.zeros_like(depth, dtype=np.float32)
-    return np.clip((depth - minimo) / rango, 0.0, 1.0).astype(np.float32)
-
-
-def extraer_profundidad_bbox(depth: np.ndarray, item: Dict, factor_recorte: float = 0.50) -> Optional[float]:
-    """Obtiene la mediana de profundidad en la región central del Bounding Box del SKU."""
+def extraer_profundidad_bbox(depth_cm: np.ndarray, item: Dict, factor_recorte: float = 0.50) -> Optional[float]:
+    """Obtiene la mediana de la profundidad (en cm) en la región central del Bounding Box."""
     if not item:
         return None
     
-    alto, ancho = depth.shape
+    alto, ancho = depth_cm.shape
     cx = (item["x1"] + item["x2"]) / 2.0
     cy = (item["y1"] + item["y2"]) / 2.0
     bw = (item["x2"] - item["x1"]) * factor_recorte
@@ -58,16 +59,13 @@ def extraer_profundidad_bbox(depth: np.ndarray, item: Dict, factor_recorte: floa
     x2 = min(ancho, int(cx + bw / 2))
     y2 = min(alto, int(cy + bh / 2))
 
-    region = depth[y1:y2, x1:x2]
+    region = depth_cm[y1:y2, x1:x2]
     validos = region[np.isfinite(region)]
     return float(np.median(validos)) if validos.size > 0 else None
 
 
 def extraer_coordenadas_rejillas(rejillas: List[Dict], ancho: int, alto: int) -> Optional[tuple[cKDTree, np.ndarray]]:
-    """
-    Extrae la lista de coordenadas (x, y) de todas las rejillas detectadas
-    por YOLO Segmentación / Detección y crea la estructura k-NN (cKDTree).
-    """
+    """Extrae la lista de coordenadas (x, y) de todas las rejillas detectadas y genera el cKDTree."""
     coords_list = []
 
     for r in rejillas:
@@ -95,15 +93,12 @@ def extraer_coordenadas_rejillas(rejillas: List[Dict], ancho: int, alto: int) ->
 
 
 def obtener_profundidad_rejilla_knn_pura(
-    depth_map: np.ndarray, 
+    depth_cm: np.ndarray, 
     producto: Dict, 
     knn_data: Optional[tuple[cKDTree, np.ndarray]], 
     k: int = 20
 ) -> Optional[float]:
-    """
-    Busca los K píxeles (x, y) de la rejilla más cercanos al centro de la paleta/SKU
-    y retorna el promedio de sus valores en la matriz de profundidad.
-    """
+    """Busca los K píxeles de rejilla más cercanos y retorna el promedio de sus profundidades en cm."""
     if knn_data is None:
         return None
 
@@ -119,9 +114,9 @@ def obtener_profundidad_rejilla_knn_pura(
     pixeles_cercanos = todas_coords[indices]
 
     profundidades = [
-        depth_map[py, px] 
+        depth_cm[py, px] 
         for px, py in pixeles_cercanos 
-        if 0 <= py < depth_map.shape[0] and 0 <= px < depth_map.shape[1] and np.isfinite(depth_map[py, px])
+        if 0 <= py < depth_cm.shape[0] and 0 <= px < depth_cm.shape[1] and np.isfinite(depth_cm[py, px])
     ]
 
     if profundidades:

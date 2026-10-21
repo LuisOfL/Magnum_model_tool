@@ -5,20 +5,29 @@ from typing import Dict, List
 import cv2
 import numpy as np
 from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image, ImageOps
 
 from config import REJILLA_KEYWORDS
 from models import model, seg_model, YOLO_DEVICE, CLASS_NAMES
 from rules import resolver_capacidad_sku, resolver_paso_profundidad
 from depth_utils import (
-    calcular_mapa_profundidad,
-    normalizar_mapa_profundidad,
+    calcular_mapa_profundidad_cm,
     extraer_profundidad_bbox,
     extraer_coordenadas_rejillas,
     obtener_profundidad_rejilla_knn_pura,
 )
 
-app = FastAPI(title="Smart Freezer Audit API - KNN de Rejillas Puro")
+app = FastAPI(title="Smart Freezer Audit API - Profundidad Métrica (cm)")
+
+# Configuración de CORS para permitir solicitudes desde el frontend (S3 o Localhost)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.post("/predict")
@@ -47,7 +56,6 @@ async def predict(file: UploadFile = File(...)):
         productos = []
         rejillas = []
 
-        # Extraer SKUs del modelo de detección
         if resultado.boxes is not None:
             for indice, box in enumerate(resultado.boxes):
                 clase_id = int(box.cls[0].item())
@@ -70,7 +78,6 @@ async def predict(file: UploadFile = File(...)):
                 else:
                     productos.append(deteccion)
 
-        # Extraer rejillas y sus máscaras del modelo de segmentación
         if resultado_seg.boxes is not None:
             masks = resultado_seg.masks.data.cpu().numpy() if resultado_seg.masks is not None else None
             
@@ -84,7 +91,6 @@ async def predict(file: UploadFile = File(...)):
                     x1, y1, x2, y2 = map(float, box.xyxy[0].tolist())
                     mask = masks[indice] if masks is not None and indice < len(masks) else None
                     
-                    # Redimensionar máscara al tamaño original de la imagen si es necesario
                     if mask is not None and mask.shape != (alto, ancho):
                         mask = cv2.resize(mask, (ancho, alto), interpolation=cv2.INTER_NEAREST)
 
@@ -98,27 +104,25 @@ async def predict(file: UploadFile = File(...)):
                         "mask": mask
                     })
 
-        # 3. Estimación del mapa de profundidad
-        depth_map = normalizar_mapa_profundidad(calcular_mapa_profundidad(pil_img))
+        # 3. Obtención del mapa de profundidad en centímetros (cm)
+        depth_cm = calcular_mapa_profundidad_cm(pil_img)
         
-        # 4. Extraer árbol de coordenadas (x,y) de todas las rejillas
+        # 4. Construcción del k-NN espacial para rejillas
         knn_data = extraer_coordenadas_rejillas(rejillas, ancho, alto)
 
         detalle_detecciones = []
         resumen_por_sku: Dict[str, Dict] = {}
 
-        # 5. Procesar CADA PALETA / DETECCIÓN individual
+        # 5. Cálculo de faltantes en centímetros
         for prod in productos:
             nombre_sku = prod["nombre"]
-            capacidad_max = resolver_capacidad_sku(nombre_sku)
-            paso_profundidad = resolver_paso_profundidad(nombre_sku)
+            capacidad_max = resolver_capacidad_sku(nombre_sku)      # Retorna 12
+            paso_profundidad_cm = resolver_paso_profundidad(nombre_sku) # Retorna 2.0 cm
 
-            # Profundidad de la paleta
-            profundidad_sku = extraer_profundidad_bbox(depth_map, prod)
-
-            # Profundidad promedio de los K=20 píxeles de rejilla más cercanos
+            # Medición en cm
+            profundidad_sku = extraer_profundidad_bbox(depth_cm, prod)
             profundidad_rejilla = obtener_profundidad_rejilla_knn_pura(
-                depth_map=depth_map,
+                depth_cm=depth_cm,
                 producto=prod,
                 knn_data=knn_data,
                 k=20
@@ -127,26 +131,35 @@ async def predict(file: UploadFile = File(...)):
             if profundidad_sku is None or profundidad_rejilla is None:
                 faltantes = 0
                 inventario_estimado = 1
-                diferencia = 0.0
+                diferencia_cm = 0.0
                 estado = "sin_profundidad"
             else:
-                # Diferencia absoluta entre la profundidad de la paleta y la de la rejilla más cercana
-                diferencia = abs(profundidad_sku - profundidad_rejilla)
+                # Diferencia real en centímetros
+                diferencia_cm = abs(profundidad_sku - profundidad_rejilla)
                 
-                # Calcular faltantes según el paso de profundidad
-                faltantes = int(round(diferencia / max(paso_profundidad, 1e-6)))
+                # Faltantes = Diferencia en cm / 2.0 cm por unidad
+                faltantes = int(round(diferencia_cm / max(paso_profundidad_cm, 1e-6)))
                 faltantes = int(np.clip(faltantes, 0, capacidad_max - 1))
                 
                 inventario_estimado = int(np.clip(capacidad_max - faltantes, 1, capacidad_max))
                 estado = "estimado_exitoso"
 
+            # Formatear el texto de distancias en cm para la auditoría en la UI
+            if profundidad_sku is not None and profundidad_rejilla is not None:
+                prof_sku_red = round(profundidad_sku, 1)
+                prof_rej_red = round(profundidad_rejilla, 1)
+                profundidad_texto = f"{prof_sku_red}cm / {prof_rej_red}cm"
+            else:
+                profundidad_texto = "N/A"
+
             detalle_detecciones.append({
                 "id_deteccion": prod["id_deteccion"],
                 "sku": nombre_sku,
                 "confianza": round(prod["confianza"], 3),
-                "profundidad_sku": round(profundidad_sku, 6) if profundidad_sku else None,
-                "profundidad_rejilla": round(profundidad_rejilla, 6) if profundidad_rejilla else None,
-                "diferencia_profundidad": round(diferencia, 6) if diferencia else None,
+                "profundidad_sku": round(profundidad_sku, 2) if profundidad_sku else None,
+                "profundidad_rejilla": round(profundidad_rejilla, 2) if profundidad_rejilla else None,
+                "profundidad_texto": profundidad_texto,
+                "diferencia_cm": round(diferencia_cm, 2) if diferencia_cm else None,
                 "capacidad_maxima": capacidad_max,
                 "faltantes_calculados": faltantes,
                 "inventario_estimado": inventario_estimado,
@@ -162,7 +175,7 @@ async def predict(file: UploadFile = File(...)):
             resumen_por_sku[nombre_sku]["visibles"] += 1
             resumen_por_sku[nombre_sku]["stock_estimado"] += inventario_estimado
 
-        # 6. Salida visual de anotaciones
+        # Visualizaciones
         anotada_bgr = resultado.plot(boxes=True, masks=False)
         buffer_det = io.BytesIO()
         Image.fromarray(anotada_bgr[:, :, ::-1]).save(buffer_det, format="JPEG", quality=90)
@@ -178,8 +191,11 @@ async def predict(file: UploadFile = File(...)):
         Image.fromarray(anotada_seg_bgr[:, :, ::-1]).save(buffer_seg, format="JPEG", quality=90)
         imagen_seg_base64 = base64.b64encode(buffer_seg.getvalue()).decode("utf-8")
 
-        depth_uint8 = (depth_map * 255).astype(np.uint8)
-        depth_colored = cv2.applyColorMap(depth_uint8, cv2.COLORMAP_INFERNO)
+        # Generación y reversión visual del mapa de calor
+        depth_vis = cv2.normalize(depth_cm, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+        depth_vis_invertido = cv2.bitwise_not(depth_vis) # Revertir el mapa de calor visual
+        
+        depth_colored = cv2.applyColorMap(depth_vis_invertido, cv2.COLORMAP_INFERNO)
         buffer_depth = io.BytesIO()
         Image.fromarray(cv2.cvtColor(depth_colored, cv2.COLOR_BGR2RGB)).save(buffer_depth, format="JPEG", quality=90)
         imagen_depth_base64 = base64.b64encode(buffer_depth.getvalue()).decode("utf-8")
