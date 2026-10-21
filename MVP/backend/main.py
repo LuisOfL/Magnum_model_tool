@@ -20,6 +20,8 @@ from depth_utils import (
 
 app = FastAPI(title="Smart Freezer Audit API - Profundidad Métrica (cm)")
 
+BUILD = "v5-obb"
+
 # Configuración de CORS para permitir solicitudes desde el frontend (S3 o Localhost)
 app.add_middleware(
     CORSMiddleware,
@@ -56,27 +58,30 @@ async def predict(file: UploadFile = File(...)):
         productos = []
         rejillas = []
 
-        if resultado.boxes is not None:
-            for indice, box in enumerate(resultado.boxes):
-                clase_id = int(box.cls[0].item())
+        # best.pt es un modelo OBB (cajas rotadas): sus resultados están en `resultado.obb`,
+        # no en `resultado.boxes`. Se soportan ambos formatos por si cambias de modelo.
+        cajas_det = resultado.obb if getattr(resultado, "obb", None) is not None else resultado.boxes
+
+        if cajas_det is not None and len(cajas_det) > 0:
+            ids_cls = cajas_det.cls.cpu().numpy().astype(int)
+            confs = cajas_det.conf.cpu().numpy()
+            xyxys = cajas_det.xyxy.cpu().numpy()  # caja alineada a los ejes que envuelve la caja rotada
+
+            for indice in range(len(ids_cls)):
+                clase_id = int(ids_cls[indice])
                 nombre = CLASS_NAMES.get(
                     clase_id,
                     model.names.get(clase_id, f"Clase_{clase_id}"),
                 )
-                x1, y1, x2, y2 = map(float, box.xyxy[0].tolist())
-                deteccion = {
+                x1, y1, x2, y2 = map(float, xyxys[indice])
+                productos.append({
                     "id_deteccion": f"det_{indice + 1}",
                     "nombre": nombre,
                     "x1": x1, "y1": y1, "x2": x2, "y2": y2,
                     "x_centro": (x1 + x2) / 2.0,
                     "y_centro": (y1 + y2) / 2.0,
-                    "confianza": float(box.conf[0].item()),
-                }
-
-                if any(k in nombre.lower() for k in REJILLA_KEYWORDS):
-                    rejillas.append(deteccion)
-                else:
-                    productos.append(deteccion)
+                    "confianza": float(confs[indice]),
+                })
 
         if resultado_seg.boxes is not None:
             masks = resultado_seg.masks.data.cpu().numpy() if resultado_seg.masks is not None else None
@@ -103,6 +108,9 @@ async def predict(file: UploadFile = File(...)):
                         "confianza": float(box.conf[0].item()),
                         "mask": mask
                     })
+
+        print(f"[{BUILD}] cajas={0 if cajas_det is None else len(cajas_det)} "
+              f"productos={len(productos)} rejillas={len(rejillas)} CLASS_NAMES={len(CLASS_NAMES)}")
 
         # 3. Obtención del mapa de profundidad en centímetros (cm)
         depth_cm = calcular_mapa_profundidad_cm(pil_img)
@@ -202,6 +210,7 @@ async def predict(file: UploadFile = File(...)):
 
         return {
             "status": "success",
+            "build": BUILD,
             "imagen_base64": imagen_base64,
             "imagen_seg_base64": imagen_seg_base64,
             "imagen_depth_base64": imagen_depth_base64,
@@ -220,4 +229,4 @@ async def predict(file: UploadFile = File(...)):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run(app, host="127.0.0.1", port=8010)
