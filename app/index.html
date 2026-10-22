@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Freezer Audit - IA</title>
+    <!-- Tailwind CSS desde CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#0B0F19',
+                        cardBg: '#1F2937',
+                        borderBg: '#374151',
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-[#0B0F19] text-gray-100 min-h-screen font-sans flex flex-col items-center p-4">
+
+    <!-- Header / Navbar -->
+    <header class="w-full bg-[#111827] border-b border-[#374151] py-4 px-6 shadow-md flex justify-center items-center gap-3 mb-6">
+        <i data-lucide="ice-cream" class="text-[#38BDF8] w-7 h-7"></i>
+        <h1 class="text-lg md:text-xl font-semibold text-white text-center">
+            Smart Freezer Audit - Detección, Segmentación y Profundidad
+        </h1>
+    </header>
+
+    <main class="w-full max-w-[1100px] flex flex-col items-center gap-6">
+
+        <!-- Selector de Endpoint API -->
+        <div class="w-full bg-[#1F2937] border border-[#374151] rounded-xl p-4 flex flex-col md:flex-row items-center gap-3 shadow-md">
+            <label for="apiUrl" class="text-xs text-gray-400 font-medium whitespace-nowrap">ENDPOINT BACKEND:</label>
+            <input type="text" id="apiUrl" value="https://fiber-handshake-blouse.ngrok-free.dev/predict" class="w-full bg-[#111827] border border-[#374151] rounded-lg px-3 py-1.5 text-sm text-[#38BDF8] focus:outline-none focus:border-[#38BDF8]" placeholder="https://tu-url.ngrok-free.app/predict">
+        </div>
+
+        <!-- Zona de Carga de Archivos -->
+        <div id="uploadZone" class="w-full bg-[#1F2937] border-2 border-dashed border-[#374151] hover:border-[#38BDF8] transition-colors rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer shadow-lg">
+            <i data-lucide="cloud-upload" class="w-14 h-14 text-[#38BDF8] mb-2"></i>
+            <p class="text-lg font-medium text-gray-200">Haz clic aquí para subir una foto</p>
+            <p class="text-xs text-gray-400 mt-1">Soporta JPG y PNG</p>
+            <input type="file" id="fileInput" accept="image/jpeg, image/png" class="hidden">
+        </div>
+
+        <!-- Indicator de Carga (Spinner) -->
+        <div id="loadingRing" class="hidden flex items-center justify-center gap-3 py-4">
+            <div class="w-5 h-5 border-3 border-[#38BDF8] border-t-transparent rounded-full animate-spin"></div>
+            <span class="text-gray-400 text-base font-normal">Procesando detección, segmentación y profundidad...</span>
+        </div>
+
+        <!-- Banner de Alertas -->
+        <div id="alertBanner" class="hidden w-full p-4 rounded-xl text-center text-sm font-medium border border-transparent transition-all"></div>
+
+        <!-- Fila de Imágenes -->
+        <div id="imagesRow" class="hidden w-full grid grid-cols-1 md:grid-cols-3 gap-4">
+            
+            <!-- Card Detección -->
+            <div class="bg-[#1F2937] border border-[#374151] rounded-2xl p-3 shadow-xl flex flex-col items-center gap-2">
+                <h3 class="text-sm font-semibold text-[#38BDF8]">Detección (Boxes)</h3>
+                <div class="w-full h-[260px] bg-[#111827] rounded-lg overflow-hidden flex items-center justify-center">
+                    <img id="imgDet" src="" alt="Detección" class="w-full h-full object-contain hidden">
+                </div>
+            </div>
+
+            <!-- Card Segmentación -->
+            <div class="bg-[#1F2937] border border-[#374151] rounded-2xl p-3 shadow-xl flex flex-col items-center gap-2">
+                <h3 class="text-sm font-semibold text-[#34D399]">Segmentación (Polígonos)</h3>
+                <div class="w-full h-[260px] bg-[#111827] rounded-lg overflow-hidden flex items-center justify-center">
+                    <img id="imgSeg" src="" alt="Segmentación" class="w-full h-full object-contain hidden">
+                </div>
+            </div>
+
+            <!-- Card Profundidad -->
+            <div class="bg-[#1F2937] border border-[#374151] rounded-2xl p-3 shadow-xl flex flex-col items-center gap-2">
+                <h3 class="text-sm font-semibold text-[#F59E0B]">Mapa de Profundidad</h3>
+                <div class="w-full h-[260px] bg-[#111827] rounded-lg overflow-hidden flex items-center justify-center">
+                    <img id="imgDepth" src="" alt="Profundidad" class="w-full h-full object-contain hidden">
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Tarjeta de Tablas / Resultados -->
+        <div id="tableCard" class="hidden w-full bg-[#1F2937] border border-[#374151] rounded-2xl p-6 shadow-2xl flex flex-col gap-6">
+            
+            <!-- Tabla 1: Resumen General -->
+            <div>
+                <h2 class="text-xl font-semibold text-[#38BDF8] mb-3">Resumen General de Inventario</h2>
+                <div class="border-t border-[#374151] pt-3 overflow-x-auto max-h-[180px] overflow-y-auto">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-[#374151] text-gray-200 sticky top-0">
+                            <tr>
+                                <th class="p-3 rounded-l-lg">Producto Identificado</th>
+                                <th class="p-3 text-right">Detecciones YOLO</th>
+                                <th class="p-3 text-right rounded-r-lg">Stock Estimado Total</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyResults" class="divide-y divide-[#374151] text-gray-300">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Tabla 2: Desglose Detallado -->
+            <div>
+                <h2 class="text-lg font-semibold text-[#F59E0B]">Desglose Detallado por Objeto Detectado</h2>
+                <p class="text-xs text-gray-400 mb-3">Muestra la estimación individual generada para cada Bounding Box de YOLO</p>
+                <div class="border-t border-[#374151] pt-3 overflow-x-auto max-h-[320px] overflow-y-auto">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-[#374151] text-gray-200 sticky top-0">
+                            <tr>
+                                <th class="p-2.5 rounded-l-lg">ID Det.</th>
+                                <th class="p-2.5">SKU Detectado</th>
+                                <th class="p-2.5 text-right">Confianza</th>
+                                <th class="p-2.5 text-right">Capacidad Máx.</th>
+                                <th class="p-2.5 text-right">Faltantes</th>
+                                <th class="p-2.5 text-right">Stock Estimado</th>
+                                <th class="p-2.5 rounded-r-lg">Prof. SKU / Rejilla</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyDetails" class="divide-y divide-[#374151] text-gray-300">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <script>
+        // Inicializar iconos de Lucide
+        lucide.createIcons();
+
+        // Referencias del DOM
+        const uploadZone = document.getElementById('uploadZone');
+        const fileInput = document.getElementById('fileInput');
+        const apiUrlInput = document.getElementById('apiUrl');
+        const loadingRing = document.getElementById('loadingRing');
+        const alertBanner = document.getElementById('alertBanner');
+        const imagesRow = document.getElementById('imagesRow');
+        const tableCard = document.getElementById('tableCard');
+
+        const imgDet = document.getElementById('imgDet');
+        const imgSeg = document.getElementById('imgSeg');
+        const imgDepth = document.getElementById('imgDepth');
+
+        const tbodyResults = document.getElementById('tbodyResults');
+        const tbodyDetails = document.getElementById('tbodyDetails');
+
+        // Eventos para abrir file picker
+        uploadZone.addEventListener('click', () => fileInput.click());
+
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            // Reset de visibilidad
+            imagesRow.classList.add('hidden');
+            tableCard.classList.add('hidden');
+            alertBanner.classList.add('hidden');
+            loadingRing.classList.remove('hidden');
+
+            const formData = new FormData();
+            formData.append('file', file, file.name);
+
+            const apiUrl = apiUrlInput.value.trim();
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+
+                    // Cargar Imágenes en Base64
+                    if (data.imagen_base64) {
+                        imgDet.src = `data:image/jpeg;base64,${data.imagen_base64}`;
+                        imgDet.classList.remove('hidden');
+                    }
+                    if (data.imagen_seg_base64) {
+                        imgSeg.src = `data:image/jpeg;base64,${data.imagen_seg_base64}`;
+                        imgSeg.classList.remove('hidden');
+                    }
+                    if (data.imagen_depth_base64) {
+                        imgDepth.src = `data:image/jpeg;base64,${data.imagen_depth_base64}`;
+                        imgDepth.classList.remove('hidden');
+                    }
+
+                    imagesRow.classList.remove('hidden');
+
+                    // Limpiar Tablas
+                    tbodyResults.innerHTML = '';
+                    tbodyDetails.innerHTML = '';
+
+                    const detecciones = data.detecciones || [];
+                    const detalles = data.detalle_detecciones || [];
+
+                    let totalPiezas = 0;
+                    let totalVisibles = 0;
+
+                    // Llenar Tabla 1 (Resumen)
+                    detecciones.forEach(item => {
+                        const stock = item.stock_estimado || 0;
+                        const visibles = item.visibles || 0;
+                        totalPiezas += stock;
+                        totalVisibles += visibles;
+
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td class="p-3 text-gray-300">${item.etiqueta || 'Desconocido'}</td>
+                            <td class="p-3 text-right font-bold text-[#38BDF8]">${visibles}</td>
+                            <td class="p-3 text-right font-bold text-[#34D399]">${stock}</td>
+                        `;
+                        tbodyResults.appendChild(tr);
+                    });
+
+                    // Llenar Tabla 2 (Detalles)
+                    if (detalles.length > 0) {
+                        detalles.forEach(det => {
+                            const profSku = det.profundidad_sku;
+                            const profRej = det.profundidad_rejilla;
+                            const txtProf = (profSku && profRej) ? `${profSku} / ${profRej}` : 'N/A';
+
+                            const tr = document.createElement('tr');
+                            tr.innerHTML = `
+                                <td class="p-2.5 text-gray-400">${det.id_deteccion || '-'}</td>
+                                <td class="p-2.5 text-gray-200">${det.sku || 'Desconocido'}</td>
+                                <td class="p-2.5 text-right text-[#38BDF8]">${(det.confianza || 0).toFixed(2)}</td>
+                                <td class="p-2.5 text-right text-gray-400">${det.capacidad_maxima || 0}</td>
+                                <td class="p-2.5 text-right text-[#EF4444]">${det.faltantes_calculados || 0}</td>
+                                <td class="p-2.5 text-right font-bold text-[#34D399]">${det.inventario_estimado || 0}</td>
+                                <td class="p-2.5 text-xs text-gray-400">${txtProf}</td>
+                            `;
+                            tbodyDetails.appendChild(tr);
+                        });
+
+                        tableCard.classList.remove('hidden');
+
+                        // Banner de Éxito
+                        showAlert(`✅ Auditoría completada: ${totalVisibles} detectados por YOLO / ${totalPiezas} piezas estimadas.`, 
+                            'bg-[#064E3B]', 'border-[#059669]', 'text-[#6EE7B7]');
+                    } else {
+                        // Banner Advertencia Vacio
+                        showAlert("⚠️ Congelador detectado vacío o productos irreconocibles.", 
+                            'bg-[#451A03]', 'border-[#D97706]', 'text-[#FCD34D]');
+                    }
+
+                } else {
+                    const errData = await response.json().catch(() => ({ detail: 'Error desconocido' }));
+                    showAlert(`❌ Error en el backend: ${errData.detail || 'Fallo en la consulta'}`, 
+                        'bg-[#450A0A]', 'border-[#DC2626]', 'text-[#FCA5A5]');
+                }
+
+            } catch (err) {
+                showAlert(`❌ Error en la solicitud: ${err.message}`, 
+                    'bg-[#450A0A]', 'border-[#DC2626]', 'text-[#FCA5A5]');
+            } finally {
+                loadingRing.classList.add('hidden');
+                fileInput.value = ''; // Limpiar input para permitir seleccionar la misma foto
+            }
+        });
+
+        function showAlert(msg, bgClass, borderClass, textClass) {
+            alertBanner.className = `w-full p-4 rounded-xl text-center text-sm font-medium border transition-all ${bgClass} ${borderClass} ${textClass}`;
+            alertBanner.textContent = msg;
+            alertBanner.classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
