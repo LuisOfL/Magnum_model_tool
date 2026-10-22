@@ -1,4 +1,4 @@
-# 🍦 SealCreamAI
+# 🍦 Scanning
 
 Sistema integral de visión por computadora e inteligencia artificial diseñado para la **auditoría y control de inventario en tiempo real** en congeladores comerciales de helados (marcas Holanda / Unilever como Magnum, Cornetto, Mordisko, Solero, etc.).
 
