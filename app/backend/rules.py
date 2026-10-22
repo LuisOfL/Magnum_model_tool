@@ -42,6 +42,9 @@ def resolver_capacidad_texto(sku_detectado: str) -> int:
             
     return CAPACIDAD_DEFAULT
 
+# Alias para compatibilidad con llamadas en main.py
+resolver_capacidad_sku = resolver_capacidad_texto
+
 def resolver_paso_profundidad(sku_detectado: str) -> float:
     """
     Busca la marca en el SKU normalizado y devuelve su paso de profundidad.

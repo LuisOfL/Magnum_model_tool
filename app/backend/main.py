@@ -10,12 +10,15 @@ from PIL import Image, ImageOps
 
 from config import REJILLA_KEYWORDS
 from models import model, seg_model, YOLO_DEVICE, CLASS_NAMES
-from rules import resolver_capacidad_texto, resolver_paso_profundidad
+from rules import resolver_capacidad_texto, resolver_paso_profundidad, resolver_capacidad_sku
 from depth_utils import (
     calcular_mapa_profundidad_cm,
     extraer_profundidad_bbox,
     extraer_coordenadas_rejillas,
     obtener_profundidad_rejilla_knn_pura,
+    calcular_profundidad_referencia_frontal,
+    obtener_profundidad_referencia_local,
+    agrupar_en_carriles,
 )
 
 app = FastAPI(title="Smart Freezer Audit API - Profundidad Métrica (cm)")
@@ -107,65 +110,55 @@ async def predict(file: UploadFile = File(...)):
         # 3. Obtención del mapa de profundidad en centímetros (cm)
         depth_cm = calcular_mapa_profundidad_cm(pil_img)
         
-        # 4. Construcción del k-NN espacial para rejillas
-        knn_data = extraer_coordenadas_rejillas(rejillas, ancho, alto)
-
+        # 4. Cálculo de profundidad e inventario métrico por cada Bounding Box
         detalle_detecciones = []
         resumen_por_sku: Dict[str, Dict] = {}
 
-        # 5. Cálculo de faltantes en centímetros
         for prod in productos:
             nombre_sku = prod["nombre"]
-            capacidad_max = resolver_capacidad_sku(nombre_sku)      # Retorna 12
-            paso_profundidad_cm = resolver_paso_profundidad(nombre_sku) # Retorna 2.0 cm
+            capacidad_max = resolver_capacidad_sku(nombre_sku)          # 12 por bounding box
+            paso_profundidad_cm = resolver_paso_profundidad(nombre_sku) # 2.0 cm por unidad
 
-            # Medición en cm
+            # 1. Medición de la profundidad del helado
             profundidad_sku = extraer_profundidad_bbox(depth_cm, prod)
-            profundidad_rejilla = obtener_profundidad_rejilla_knn_pura(
-                depth_cm=depth_cm,
-                producto=prod,
-                knn_data=knn_data,
-                k=20
-            )
 
-            if profundidad_sku is None or profundidad_rejilla is None:
+            # 2. Referencia adaptativa local según su canastilla y perspectiva (evita que el fondo se vea vacío)
+            z_ref_local = obtener_profundidad_referencia_local(depth_cm, prod, rejillas)
+
+            if profundidad_sku is None:
                 faltantes = 0
                 inventario_estimado = 1
                 diferencia_cm = 0.0
                 estado = "sin_profundidad"
+                profundidad_texto = "N/A"
             else:
-                # Diferencia real en centímetros
-                diferencia_cm = abs(profundidad_sku - profundidad_rejilla)
-                
-                # Faltantes = Diferencia en cm / 2.0 cm por unidad
+                # Distancia física desde el tope de llenado local de esa canastilla/cota
+                diferencia_cm = max(0.0, profundidad_sku - z_ref_local)
                 faltantes = int(round(diferencia_cm / max(paso_profundidad_cm, 1e-6)))
                 faltantes = int(np.clip(faltantes, 0, capacidad_max - 1))
-                
                 inventario_estimado = int(np.clip(capacidad_max - faltantes, 1, capacidad_max))
                 estado = "estimado_exitoso"
 
-            # Formatear el texto de distancias en cm para la auditoría en la UI
-            if profundidad_sku is not None and profundidad_rejilla is not None:
                 prof_sku_red = round(profundidad_sku, 1)
-                prof_rej_red = round(profundidad_rejilla, 1)
-                profundidad_texto = f"{prof_sku_red}cm / {prof_rej_red}cm"
-            else:
-                profundidad_texto = "N/A"
+                z_ref_red = round(z_ref_local, 1)
+                profundidad_texto = f"{prof_sku_red}cm / {z_ref_red}cm"
 
             detalle_detecciones.append({
                 "id_deteccion": prod["id_deteccion"],
                 "sku": nombre_sku,
                 "confianza": round(prod["confianza"], 3),
-                "profundidad_sku": round(profundidad_sku, 2) if profundidad_sku else None,
-                "profundidad_rejilla": round(profundidad_rejilla, 2) if profundidad_rejilla else None,
+                "profundidad_sku": round(profundidad_sku, 1) if profundidad_sku else None,
+                "profundidad_rejilla": round(z_ref_local, 1),
                 "profundidad_texto": profundidad_texto,
-                "diferencia_cm": round(diferencia_cm, 2) if diferencia_cm else None,
+                "diferencia_cm": round(diferencia_cm, 1) if profundidad_sku else None,
                 "capacidad_maxima": capacidad_max,
                 "faltantes_calculados": faltantes,
                 "inventario_estimado": inventario_estimado,
                 "estado": estado,
             })
 
+            # Cada Bounding Box suma su propio stock estimado (hasta 12 cada uno)
+            # Permitiendo 36 a 60 piezas por canastilla según las cajas detectadas
             if nombre_sku not in resumen_por_sku:
                 resumen_por_sku[nombre_sku] = {
                     "etiqueta": nombre_sku,
@@ -174,6 +167,14 @@ async def predict(file: UploadFile = File(...)):
                 }
             resumen_por_sku[nombre_sku]["visibles"] += 1
             resumen_por_sku[nombre_sku]["stock_estimado"] += inventario_estimado
+
+        # Ordenar detalle numéricamente por id_deteccion (det_1, det_2, ...)
+        def _extraer_num(id_str):
+            try:
+                return int(id_str.split("_")[1])
+            except Exception:
+                return 0
+        detalle_detecciones.sort(key=lambda d: _extraer_num(d.get("id_deteccion", "")))
 
         # Visualizaciones
         anotada_bgr = resultado.plot(boxes=True, masks=False)

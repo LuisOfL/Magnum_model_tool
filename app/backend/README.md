@@ -20,7 +20,7 @@ Microservicio REST desarrollado con **FastAPI** encargado de orquestar el pipeli
 | :--- | :--- |
 | [`main.py`](file:///c:/Users/luigu/OneDrive/Escritorio/Ultimate_Model_Ice/app/backend/main.py) | Punto de entrada del servidor FastAPI, definición de rutas (`/predict`), orquestación del pipeline, generación de visualizaciones en Base64 y configuración de CORS. |
 | [`models.py`](file:///c:/Users/luigu/OneDrive/Escritorio/Ultimate_Model_Ice/app/backend/models.py) | Inicialización y carga de los 3 modelos de IA (`best.pt`, `segmentation.pt` y `Depth-Anything-V2-Small-hf`), con detección automática de aceleración por GPU (CUDA / CPU). |
-| [`depth_utils.py`](file:///c:/Users/luigu/OneDrive/Escritorio/Ultimate_Model_Ice/app/backend/depth_utils.py) | Módulo de procesamiento geométrico y profundidad: interpolación bicúbica, escalado físico a centímetros, extracción por mediana en Bounding Box y búsqueda espacial k-NN con `cKDTree`. |
+| [`depth_utils.py`](file:///c:/Users/luigu/OneDrive/Escritorio/Ultimate_Model_Ice/app/backend/depth_utils.py) | Módulo de procesamiento geométrico y profundidad: Filtro Guiado (Guided Filter) para preservar y transferir bordes finos de rejillas, escalado físico a centímetros, extracción por mediana en Bounding Box y búsqueda espacial k-NN con `cKDTree`. |
 | [`config.py`](file:///c:/Users/luigu/OneDrive/Escritorio/Ultimate_Model_Ice/app/backend/config.py) | Configuración de rutas de pesos, diccionario de capacidades máximas por SKU, paso físico en cm por unidad (2.0 cm) y palabras clave para identificar rejillas. |
 | [`rules.py`](file:///c:/Users/luigu/OneDrive/Escritorio/Ultimate_Model_Ice/app/backend/rules.py) | Normalización de cadenas de texto y reglas heurísticas de capacidad y profundidad asociadas a los nombres de los productos. |
 | [`best.pt`](file:///c:/Users/luigu/OneDrive/Escritorio/Ultimate_Model_Ice/app/backend/best.pt) | Pesos de red neuronal para el modelo **YOLOv8 OBB** (detección orientada de helados). |
@@ -68,13 +68,13 @@ sequenceDiagram
     end
 
     Depth-->>API: Mapa continuo de profundidad
-    Note over API: Calibración y reescalado de profundidad a centímetros (5 a 30 cm)
+    Note over API: Calibración y reescalado de profundidad a centímetros (5 a 30 cm) con Filtro Guiado
 
-    API->>Math: Fusión de datos espaciales
-    Note over Math: Extracción de profundidad del producto (mediana en caja central)<br/>Extracción de coordenadas de rejilla y creación de SciPy cKDTree<br/>Consulta k-NN (k=20) desde el centro del SKU a la rejilla más cercana
-    Math-->>API: Diferencia de profundidad en cm
+    API->>Math: Fusión de datos espaciales y geometría 3D
+    Note over Math: Extracción de profundidad por SKU (mediana en caja central)<br/>Cálculo de referencia local adaptativa por BBox (Z_ref local según canastilla y perspectiva Y)<br/>Compensación de fuga 3D para evitar que pilas traseras llenas parezcan vacías
+    Math-->>API: Stock y faltantes por Bounding Box (hasta 12 c/u, 36-60 por canastilla)
 
-    Note over API: Cálculo de faltantes: round(diferencia_cm / 2.0 cm)<br/>Stock estimado = clip(capacidad - faltantes, 1, capacidad)<br/>Renderizado de imágenes (Detección, Segmentación y Mapa de calor Inferno)
+    Note over API: Faltantes = round((Z_sku - Z_ref_local) / 2.0 cm)<br/>Stock_BBox = clip(capacidad - faltantes, 1, capacidad)<br/>Acumulación de stock total por SKU en el resumen general<br/>Renderizado de imágenes (Detección, Segmentación y Mapa de calor Inferno)
     
     API-->>Cliente: JSON con métricas, inventario y visualizaciones Base64
 ```
