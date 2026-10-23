@@ -10,24 +10,23 @@ from PIL import Image, ImageOps
 
 from config import REJILLA_KEYWORDS
 from models import model, seg_model, YOLO_DEVICE, CLASS_NAMES
-from rules import resolver_capacidad_texto, resolver_paso_profundidad, resolver_capacidad_sku
+from rules import resolver_capacidad_sku, resolver_paso_profundidad
 from depth_utils import (
     calcular_mapa_profundidad_cm,
     extraer_profundidad_bbox,
     extraer_coordenadas_rejillas,
     obtener_profundidad_rejilla_knn_pura,
-    calcular_profundidad_referencia_frontal,
-    obtener_profundidad_referencia_local,
-    agrupar_en_carriles,
 )
 
 app = FastAPI(title="Smart Freezer Audit API - Profundidad Métrica (cm)")
+
+BUILD = "v5-obb"
 
 # Configuración de CORS para permitir solicitudes desde el frontend (S3 o Localhost)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -59,27 +58,30 @@ async def predict(file: UploadFile = File(...)):
         productos = []
         rejillas = []
 
-        if resultado.boxes is not None:
-            for indice, box in enumerate(resultado.boxes):
-                clase_id = int(box.cls[0].item())
+        # best.pt es un modelo OBB (cajas rotadas): sus resultados están en `resultado.obb`,
+        # no en `resultado.boxes`. Se soportan ambos formatos por si cambias de modelo.
+        cajas_det = resultado.obb if getattr(resultado, "obb", None) is not None else resultado.boxes
+
+        if cajas_det is not None and len(cajas_det) > 0:
+            ids_cls = cajas_det.cls.cpu().numpy().astype(int)
+            confs = cajas_det.conf.cpu().numpy()
+            xyxys = cajas_det.xyxy.cpu().numpy()  # caja alineada a los ejes que envuelve la caja rotada
+
+            for indice in range(len(ids_cls)):
+                clase_id = int(ids_cls[indice])
                 nombre = CLASS_NAMES.get(
                     clase_id,
                     model.names.get(clase_id, f"Clase_{clase_id}"),
                 )
-                x1, y1, x2, y2 = map(float, box.xyxy[0].tolist())
-                deteccion = {
+                x1, y1, x2, y2 = map(float, xyxys[indice])
+                productos.append({
                     "id_deteccion": f"det_{indice + 1}",
                     "nombre": nombre,
                     "x1": x1, "y1": y1, "x2": x2, "y2": y2,
                     "x_centro": (x1 + x2) / 2.0,
                     "y_centro": (y1 + y2) / 2.0,
-                    "confianza": float(box.conf[0].item()),
-                }
-
-                if any(k in nombre.lower() for k in REJILLA_KEYWORDS):
-                    rejillas.append(deteccion)
-                else:
-                    productos.append(deteccion)
+                    "confianza": float(confs[indice]),
+                })
 
         if resultado_seg.boxes is not None:
             masks = resultado_seg.masks.data.cpu().numpy() if resultado_seg.masks is not None else None
@@ -107,58 +109,71 @@ async def predict(file: UploadFile = File(...)):
                         "mask": mask
                     })
 
+        print(f"[{BUILD}] cajas={0 if cajas_det is None else len(cajas_det)} "
+              f"productos={len(productos)} rejillas={len(rejillas)} CLASS_NAMES={len(CLASS_NAMES)}")
+
         # 3. Obtención del mapa de profundidad en centímetros (cm)
         depth_cm = calcular_mapa_profundidad_cm(pil_img)
         
-        # 4. Cálculo de profundidad e inventario métrico por cada Bounding Box
+        # 4. Construcción del k-NN espacial para rejillas
+        knn_data = extraer_coordenadas_rejillas(rejillas, ancho, alto)
+
         detalle_detecciones = []
         resumen_por_sku: Dict[str, Dict] = {}
 
+        # 5. Cálculo de faltantes en centímetros
         for prod in productos:
             nombre_sku = prod["nombre"]
-            capacidad_max = resolver_capacidad_sku(nombre_sku)          # 12 por bounding box
-            paso_profundidad_cm = resolver_paso_profundidad(nombre_sku) # 2.0 cm por unidad
+            capacidad_max = resolver_capacidad_sku(nombre_sku)      # Retorna 12
+            paso_profundidad_cm = resolver_paso_profundidad(nombre_sku) # Retorna 2.0 cm
 
-            # 1. Medición de la profundidad del helado
+            # Medición en cm
             profundidad_sku = extraer_profundidad_bbox(depth_cm, prod)
+            profundidad_rejilla = obtener_profundidad_rejilla_knn_pura(
+                depth_cm=depth_cm,
+                producto=prod,
+                knn_data=knn_data,
+                k=20
+            )
 
-            # 2. Referencia adaptativa local según su canastilla y perspectiva (evita que el fondo se vea vacío)
-            z_ref_local = obtener_profundidad_referencia_local(depth_cm, prod, rejillas)
-
-            if profundidad_sku is None:
+            if profundidad_sku is None or profundidad_rejilla is None:
                 faltantes = 0
                 inventario_estimado = 1
                 diferencia_cm = 0.0
                 estado = "sin_profundidad"
-                profundidad_texto = "N/A"
             else:
-                # Distancia física desde el tope de llenado local de esa canastilla/cota
-                diferencia_cm = max(0.0, profundidad_sku - z_ref_local)
+                # Diferencia real en centímetros
+                diferencia_cm = abs(profundidad_sku - profundidad_rejilla)
+                
+                # Faltantes = Diferencia en cm / 2.0 cm por unidad
                 faltantes = int(round(diferencia_cm / max(paso_profundidad_cm, 1e-6)))
                 faltantes = int(np.clip(faltantes, 0, capacidad_max - 1))
+                
                 inventario_estimado = int(np.clip(capacidad_max - faltantes, 1, capacidad_max))
                 estado = "estimado_exitoso"
 
+            # Formatear el texto de distancias en cm para la auditoría en la UI
+            if profundidad_sku is not None and profundidad_rejilla is not None:
                 prof_sku_red = round(profundidad_sku, 1)
-                z_ref_red = round(z_ref_local, 1)
-                profundidad_texto = f"{prof_sku_red}cm / {z_ref_red}cm"
+                prof_rej_red = round(profundidad_rejilla, 1)
+                profundidad_texto = f"{prof_sku_red}cm / {prof_rej_red}cm"
+            else:
+                profundidad_texto = "N/A"
 
             detalle_detecciones.append({
                 "id_deteccion": prod["id_deteccion"],
                 "sku": nombre_sku,
                 "confianza": round(prod["confianza"], 3),
-                "profundidad_sku": round(profundidad_sku, 1) if profundidad_sku else None,
-                "profundidad_rejilla": round(z_ref_local, 1),
+                "profundidad_sku": round(profundidad_sku, 2) if profundidad_sku else None,
+                "profundidad_rejilla": round(profundidad_rejilla, 2) if profundidad_rejilla else None,
                 "profundidad_texto": profundidad_texto,
-                "diferencia_cm": round(diferencia_cm, 1) if profundidad_sku else None,
+                "diferencia_cm": round(diferencia_cm, 2) if diferencia_cm else None,
                 "capacidad_maxima": capacidad_max,
                 "faltantes_calculados": faltantes,
                 "inventario_estimado": inventario_estimado,
                 "estado": estado,
             })
 
-            # Cada Bounding Box suma su propio stock estimado (hasta 12 cada uno)
-            # Permitiendo 36 a 60 piezas por canastilla según las cajas detectadas
             if nombre_sku not in resumen_por_sku:
                 resumen_por_sku[nombre_sku] = {
                     "etiqueta": nombre_sku,
@@ -167,14 +182,6 @@ async def predict(file: UploadFile = File(...)):
                 }
             resumen_por_sku[nombre_sku]["visibles"] += 1
             resumen_por_sku[nombre_sku]["stock_estimado"] += inventario_estimado
-
-        # Ordenar detalle numéricamente por id_deteccion (det_1, det_2, ...)
-        def _extraer_num(id_str):
-            try:
-                return int(id_str.split("_")[1])
-            except Exception:
-                return 0
-        detalle_detecciones.sort(key=lambda d: _extraer_num(d.get("id_deteccion", "")))
 
         # Visualizaciones
         anotada_bgr = resultado.plot(boxes=True, masks=False)
@@ -203,6 +210,7 @@ async def predict(file: UploadFile = File(...)):
 
         return {
             "status": "success",
+            "build": BUILD,
             "imagen_base64": imagen_base64,
             "imagen_seg_base64": imagen_seg_base64,
             "imagen_depth_base64": imagen_depth_base64,
@@ -221,4 +229,4 @@ async def predict(file: UploadFile = File(...)):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run(app, host="127.0.0.1", port=8000)
