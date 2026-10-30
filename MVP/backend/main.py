@@ -1,11 +1,14 @@
 import base64
 import io
+from pathlib import Path
 from typing import Dict, List
 
 import cv2
 import numpy as np
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from starlette.concurrency import run_in_threadpool
 from PIL import Image, ImageOps
 
 from config import REJILLA_KEYWORDS
@@ -17,31 +20,99 @@ from depth_utils import (
     extraer_coordenadas_rejillas,
     obtener_profundidad_rejilla_knn_pura,
 )
+from video_utils import crear_panoramica_desde_video, procesar_video_con_modelos
 
 app = FastAPI(title="Smart Freezer Audit API - Profundidad Métrica (cm)")
 
-BUILD = "v5-obb"
+BUILD = "v6-video-stream-models"
 
-# Configuración de CORS para permitir solicitudes desde el frontend (S3 o Localhost)
+CARPETA_PROYECTO = Path(__file__).resolve().parent
+INDEX_HTML = CARPETA_PROYECTO / "index.html"
+if not INDEX_HTML.exists() and (CARPETA_PROYECTO.parent / "index.html").exists():
+    INDEX_HTML = CARPETA_PROYECTO.parent / "index.html"
+CARPETA_VIDEOS = CARPETA_PROYECTO / "static" / "videos"
+CARPETA_VIDEOS.mkdir(parents=True, exist_ok=True)
+
+# Configuración de CORS para permitir solicitudes desde el frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+@app.get("/", include_in_schema=False)
+@app.get("", include_in_schema=False)
+@app.get("/index.html", include_in_schema=False)
+async def frontend():
+    if not INDEX_HTML.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"No se encontró index.html en {INDEX_HTML}",
+        )
+    return FileResponse(INDEX_HTML, media_type="text/html")
+
+@app.get("/health", include_in_schema=False)
+async def health():
+    return {"status": "ok"}
+
+@app.get("/videos/{video_filename}")
+async def get_video(video_filename: str):
+    video_path = CARPETA_VIDEOS / video_filename
+    if not video_path.exists():
+        raise HTTPException(status_code=404, detail="Video no encontrado")
+    return FileResponse(video_path, media_type="video/mp4")
 
 @app.post("/predict")
-async def predict(file: UploadFile = File(...)):
-    if not file.content_type or not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="El archivo debe ser una imagen válida.")
+@app.post("/predict/")
+@app.post("/{full_path:path}/predict")
+@app.post("/{full_path:path}/predict/")
+async def predict(
+    file: UploadFile = File(...),
+    numero_serie: str = Form("DEFAULT")
+):
+    content_type = file.content_type or ""
+    filename = (file.filename or "").lower()
+    es_video = content_type.startswith("video/") or filename.endswith((".mp4", ".avi", ".mov", ".webm", ".mkv"))
+    es_imagen = content_type.startswith("image/") or filename.endswith((".jpg", ".jpeg", ".png", ".webp", ".bmp"))
+
+    if not (es_video or es_imagen):
+        raise HTTPException(status_code=400, detail="El archivo debe ser una imagen o video válido.")
 
     try:
-        image_bytes = await file.read()
+        file_bytes = await file.read()
+        
+        if es_video:
+            # Control de frames adaptativo: 50 en GPU o 25 en CPU para responder en < 60 segundos
+            limite_frames = 50 if YOLO_DEVICE == 0 else 25
+            
+            # Ejecutar en threadpool desacoplado para no bloquear el loop HTTP ni provocar timeout
+            resultado_video = await run_in_threadpool(
+                procesar_video_con_modelos,
+                video_bytes=file_bytes,
+                model=model,
+                seg_model=seg_model,
+                depth_calc_func=calcular_mapa_profundidad_cm,
+                class_names=CLASS_NAMES,
+                rejilla_keywords=REJILLA_KEYWORDS,
+                resolver_capacidad_sku=lambda sku: resolver_capacidad_sku(sku, numero_serie=numero_serie),
+                resolver_paso_profundidad=lambda sku: resolver_paso_profundidad(sku, numero_serie=numero_serie),
+                extraer_profundidad_bbox=extraer_profundidad_bbox,
+                extraer_coordenadas_rejillas=extraer_coordenadas_rejillas,
+                obtener_profundidad_rejilla_knn_pura=obtener_profundidad_rejilla_knn_pura,
+                output_dir=CARPETA_VIDEOS,
+                device=YOLO_DEVICE,
+                max_frames=limite_frames,
+            )
+            resultado_video["build"] = BUILD
+            return resultado_video
+
+        # Procesar la imagen normalmente
         pil_img = ImageOps.exif_transpose(
-            Image.open(io.BytesIO(image_bytes))
+            Image.open(io.BytesIO(file_bytes))
         ).convert("RGB")
+            
         ancho, alto = pil_img.size
 
         # 1. Detección principal (Bounding Boxes de productos)
@@ -58,14 +129,12 @@ async def predict(file: UploadFile = File(...)):
         productos = []
         rejillas = []
 
-        # best.pt es un modelo OBB (cajas rotadas): sus resultados están en `resultado.obb`,
-        # no en `resultado.boxes`. Se soportan ambos formatos por si cambias de modelo.
         cajas_det = resultado.obb if getattr(resultado, "obb", None) is not None else resultado.boxes
 
         if cajas_det is not None and len(cajas_det) > 0:
             ids_cls = cajas_det.cls.cpu().numpy().astype(int)
             confs = cajas_det.conf.cpu().numpy()
-            xyxys = cajas_det.xyxy.cpu().numpy()  # caja alineada a los ejes que envuelve la caja rotada
+            xyxys = cajas_det.xyxy.cpu().numpy() 
 
             for indice in range(len(ids_cls)):
                 clase_id = int(ids_cls[indice])
@@ -119,13 +188,13 @@ async def predict(file: UploadFile = File(...)):
         knn_data = extraer_coordenadas_rejillas(rejillas, ancho, alto)
 
         detalle_detecciones = []
-        resumen_por_sku: Dict[str, Dict] = {}
+        resumen_por_sku = {}
 
         # 5. Cálculo de faltantes en centímetros
         for prod in productos:
             nombre_sku = prod["nombre"]
-            capacidad_max = resolver_capacidad_sku(nombre_sku)      # Retorna 12
-            paso_profundidad_cm = resolver_paso_profundidad(nombre_sku) # Retorna 2.0 cm
+            capacidad_max = resolver_capacidad_sku(nombre_sku)      
+            paso_profundidad_cm = resolver_paso_profundidad(nombre_sku) 
 
             # Medición en cm
             profundidad_sku = extraer_profundidad_bbox(depth_cm, prod)
@@ -142,17 +211,13 @@ async def predict(file: UploadFile = File(...)):
                 diferencia_cm = 0.0
                 estado = "sin_profundidad"
             else:
-                # Diferencia real en centímetros
                 diferencia_cm = abs(profundidad_sku - profundidad_rejilla)
-                
-                # Faltantes = Diferencia en cm / 2.0 cm por unidad
                 faltantes = int(round(diferencia_cm / max(paso_profundidad_cm, 1e-6)))
                 faltantes = int(np.clip(faltantes, 0, capacidad_max - 1))
                 
                 inventario_estimado = int(np.clip(capacidad_max - faltantes, 1, capacidad_max))
                 estado = "estimado_exitoso"
 
-            # Formatear el texto de distancias en cm para la auditoría en la UI
             if profundidad_sku is not None and profundidad_rejilla is not None:
                 prof_sku_red = round(profundidad_sku, 1)
                 prof_rej_red = round(profundidad_rejilla, 1)
@@ -201,7 +266,7 @@ async def predict(file: UploadFile = File(...)):
 
         # Generación y reversión visual del mapa de calor
         depth_vis = cv2.normalize(depth_cm, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
-        depth_vis_invertido = cv2.bitwise_not(depth_vis) # Revertir el mapa de calor visual
+        depth_vis_invertido = cv2.bitwise_not(depth_vis) 
         
         depth_colored = cv2.applyColorMap(depth_vis_invertido, cv2.COLORMAP_INFERNO)
         buffer_depth = io.BytesIO()
@@ -210,6 +275,7 @@ async def predict(file: UploadFile = File(...)):
 
         return {
             "status": "success",
+            "tipo": "image",
             "build": BUILD,
             "imagen_base64": imagen_base64,
             "imagen_seg_base64": imagen_seg_base64,
@@ -229,4 +295,4 @@ async def predict(file: UploadFile = File(...)):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8010)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)

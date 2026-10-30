@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scanning - Detección de Inventario</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        creamBg: '#fbf9f5',
+                        cardCream: '#ffffff',
+                        borderCream: '#f3e8e2',
+                        accentCoral: '#e06d7e',
+                        accentRose: '#d946ef'
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #fbf9f5;
+            color: #2d3748;
+            overflow: hidden;
+        }
+        .code-font {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        /* Gradient Text Helper */
+        .text-gradient {
+            background: linear-gradient(135deg, #e11d48 0%, #db2777 50%, #9333ea 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        /* Custom smooth slide and fade animations */
+        .slide {
+            display: none;
+            opacity: 0;
+            transform: translateY(15px);
+            transition: opacity 0.4s ease-out, transform 0.4s ease-out;
+        }
+        .slide.active {
+            display: flex;
+            opacity: 1;
+            transform: translateY(0);
+        }
+        /* Elegant presentation slide card */
+        .pres-card {
+            background: #ffffff;
+            border: 1.5px solid #f2e6e1;
+            box-shadow: 0 20px 45px -15px rgba(225, 29, 72, 0.06);
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f7f4ef;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #e2d4cd;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col justify-between select-none relative bg-[#fbf9f5]">
+
+    <!-- Top Navigation Header / Progress bar -->
+    <header class="w-full px-8 py-5 flex items-center justify-between border-b border-[#f3e8e2] bg-[#fbf9f5]/90 backdrop-blur-md z-20 shadow-xs">
+        <div class="flex items-center space-x-3">
+            <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-rose-500 to-pink-600 flex items-center justify-center shadow-md shadow-rose-500/20 text-white font-bold text-base">
+                <i class="fa-solid fa-cube text-white text-sm"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-sm md:text-base tracking-wide text-gradient">
+                    Smart Freezer AI Audit
+                </h1>
+                <p class="text-xs text-slate-500">Visión Artificial y Profundidad Métrica en Congeladores</p>
+            </div>
+        </div>
+        
+        <!-- Slide Indicators / Nav dots -->
+        <div class="hidden lg:flex items-center space-x-2 bg-rose-50/60 px-4 py-2 rounded-full border border-rose-100/60" id="dots-container">
+            <!-- Generated dynamically via JS -->
+        </div>
+
+        <!-- Counter & Quick Info -->
+        <div class="flex items-center space-x-4">
+            <span class="text-xs font-semibold px-3.5 py-1.5 rounded-full bg-rose-50 text-rose-600 border border-rose-200 code-font" id="slide-counter">
+                01 / 07
+            </span>
+        </div>
+    </header>
+
+    <!-- Main Presentation Workspace -->
+    <main class="flex-1 relative overflow-hidden flex items-center justify-center p-4 md:p-8">
+        
+        <!-- CONTAINER FOR ALL SLIDES -->
+        <div class="w-full max-w-5xl h-[82vh] pres-card rounded-3xl p-6 md:p-10 flex items-center justify-center relative overflow-y-auto">
+
+            <!-- SLIDE 1: PORTADA -->
+            <div class="slide active w-full h-full flex-col justify-center items-center text-center px-4" data-slide="1">
+                <div class="inline-flex items-center space-x-2 px-4 py-1.5 rounded-full bg-rose-50 border border-rose-200/80 text-rose-600 text-xs md:text-sm font-semibold mb-6">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    <span>Tecnología de Vanguardia en Retail Intelligence</span>
+                </div>
+                <h1 class="text-4xl md:text-7xl font-extrabold tracking-tight mb-3 leading-tight text-slate-900">
+                    Scanning.
+                </h1>
+                <h2 class="text-2xl md:text-4xl font-extrabold text-gradient mb-6 uppercase tracking-wide">
+                    Detección de Inventario
+                </h2>
+                <p class="text-slate-600 text-sm md:text-base max-w-2xl mx-auto mb-10 leading-relaxed font-normal">
+                    Sistema automatizado de auditoría de inventario en congeladores comerciales combinando Visión por Computadora (YOLO) y Estimación de Profundidad Métrica en centímetros.
+                </p>
+                <div class="flex justify-center">
+                    <button onclick="nextSlide()" class="px-8 py-3.5 rounded-2xl bg-gradient-to-r from-rose-500 to-pink-600 text-white font-semibold shadow-lg shadow-rose-500/25 hover:shadow-rose-500/40 hover:scale-105 transition-all flex items-center space-x-2">
+                        <span>Iniciar Presentación</span>
+                        <i class="fa-solid fa-arrow-right"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- SLIDE 2: EL RETO Y LA SOLUCIÓN -->
+            <div class="slide w-full h-full flex-col justify-center px-2 md:px-4" data-slide="2">
+                <div class="max-w-4xl mx-auto w-full">
+                    <div class="mb-3 text-center md:text-left">
+                        <span class="text-xs font-bold text-rose-600 uppercase tracking-wider">Contexto del Problema</span>
+                        <h2 class="text-xl md:text-2xl font-extrabold text-gradient mt-0.5">El Reto de Auditar Congeladores Comerciales</h2>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <!-- Card Problema -->
+                        <div class="p-3.5 rounded-xl bg-rose-50/40 border border-rose-100 relative">
+                            <div class="flex items-center space-x-2.5 mb-2">
+                                <div class="w-7 h-7 rounded-lg bg-rose-100 text-rose-600 flex items-center justify-center text-xs">
+                                    <i class="fa-solid fa-triangle-exclamation"></i>
+                                </div>
+                                <h3 class="font-bold text-rose-900 text-xs md:text-sm">¿Por qué es difícil contar inventario?</h3>
+                            </div>
+                            <ul class="space-y-1 text-slate-600 text-[11px] md:text-xs">
+                                <li class="flex items-start space-x-1.5">
+                                    <i class="fa-solid fa-xmark text-rose-500 mt-0.5"></i>
+                                    <span><strong>Apilamiento vertical:</strong> Solo se ven los productos superiores.</span>
+                                </li>
+                                <li class="flex items-start space-x-1.5">
+                                    <i class="fa-solid fa-xmark text-rose-500 mt-0.5"></i>
+                                    <span><strong>Oclusión y desorden:</strong> Empaques similares y amontonados.</span>
+                                </li>
+                                <li class="flex items-start space-x-1.5">
+                                    <i class="fa-solid fa-xmark text-rose-500 mt-0.5"></i>
+                                    <span><strong>Pérdidas económicas:</strong> Agotados invisibles en tienda.</span>
+                                </li>
+                            </ul>
+                        </div>
+
+                        <!-- Card Solución -->
+                        <div class="p-3.5 rounded-xl bg-pink-50/30 border border-pink-100 relative flex flex-col justify-between">
+                            <div>
+                                <div class="flex items-center space-x-2.5 mb-2">
+                                    <div class="w-7 h-7 rounded-lg bg-pink-100 text-pink-600 flex items-center justify-center text-xs">
+                                        <i class="fa-solid fa-brain"></i>
+                                    </div>
+                                    <h3 class="font-bold text-rose-900 text-xs md:text-sm">Nuestra Solución IA en 3 Pasos</h3>
+                                </div>
+                                <ul class="space-y-1 text-slate-600 text-[11px] md:text-xs mb-3">
+                                    <li class="flex items-start space-x-1.5">
+                                        <i class="fa-solid fa-check text-rose-500 mt-0.5"></i>
+                                        <span><strong>Detección OBB:</strong> Identifica SKU y confianza.</span>
+                                    </li>
+                                    <li class="flex items-start space-x-1.5">
+                                        <i class="fa-solid fa-check text-rose-500 mt-0.5"></i>
+                                        <span><strong>Segmentación:</strong> Ubica el fondo con polígonos.</span>
+                                    </li>
+                                    <li class="flex items-start space-x-1.5">
+                                        <i class="fa-solid fa-check text-rose-500 mt-0.5"></i>
+                                        <span><strong>Profundidad Métrica:</strong> Calcula piezas faltantes.</span>
+                                    </li>
+                                </ul>
+                            </div>
+
+                            <!-- Botón para ver el flujo de las imágenes 1 a 3 -->
+                            <div>
+                                <button onclick="openFlowModal()" class="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-rose-500 to-pink-600 text-white font-semibold shadow-md shadow-rose-500/20 hover:shadow-rose-500/40 hover:scale-[1.01] transition-all flex items-center justify-center space-x-2 text-xs">
+                                    <i class="fa-solid fa-images"></i>
+                                    <span>Ver Flujo IA (Imágenes 1 - 3)</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SLIDE 3: PASO 1 - YOLO OBB -->
+            <div class="slide w-full h-full flex-col justify-center px-2 md:px-6" data-slide="3">
+                <div class="max-w-4xl mx-auto w-full">
+                    <div class="flex items-center space-x-3 mb-4">
+                        <span class="px-3 py-1 rounded-full bg-rose-100 text-rose-700 font-bold text-xs">PASO 01</span>
+                        <h2 class="text-2xl md:text-3xl font-extrabold text-gradient">Detección de Productos (YOLO OBB)</h2>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-5 items-center">
+                        <div class="md:col-span-2 p-5 rounded-2xl bg-white border border-rose-100 shadow-xs">
+                            <p class="text-slate-600 text-xs md:text-sm leading-relaxed mb-4">
+                                El sistema analiza la imagen superior del congelador utilizando un modelo <strong>YOLO OBB</strong> (Oriented Bounding Boxes). Este algoritmo detecta objetos con cajas rotadas para ajustarse perfectamente a la inclinación y orientación de los empaques de helados y postres (como <em>Holanda, Magnum, Solero, Cornetto</em>).
+                            </p>
+                            <div class="grid grid-cols-2 gap-3 text-xs code-font">
+                                <div class="bg-rose-50/50 p-3 rounded-xl border border-rose-100">
+                                    <span class="text-rose-600 font-bold block mb-1">Detección Precisa:</span>
+                                    <span class="text-slate-600">Extrae coordenadas (x1, y1, x2, y2), centroide y puntaje de confianza.</span>
+                                </div>
+                                <div class="bg-pink-50/30 p-3 rounded-xl border border-pink-100">
+                                    <span class="text-pink-600 font-bold block mb-1">Superficie Visible:</span>
+                                    <span class="text-slate-600">Localiza exactamente los productos expuestos en la cima de la pila.</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Visual Mockup Card -->
+                        <div class="p-5 rounded-2xl bg-white border border-rose-100 shadow-xs flex flex-col items-center justify-center text-center">
+                            <div class="w-full h-32 rounded-xl bg-gradient-to-br from-rose-100/50 to-pink-100/50 border border-rose-200 flex items-center justify-center relative overflow-hidden mb-3">
+                                <div class="absolute inset-0 flex items-center justify-center">
+                                    <div class="w-3/4 h-1/2 border-2 border-rose-500 rounded-lg flex items-center justify-center bg-rose-500/10">
+                                        <span class="text-xs text-rose-700 font-bold code-font">Magnum (0.94)</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <span class="text-xs text-slate-500 font-medium">Bounding Box Rotado (OBB)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SLIDE 4: PASO 2 - SEGMENTACIÓN DE REJILLAS -->
+            <div class="slide w-full h-full flex-col justify-center px-2 md:px-6" data-slide="4">
+                <div class="max-w-4xl mx-auto w-full">
+                    <div class="flex items-center space-x-3 mb-4">
+                        <span class="px-3 py-1 rounded-full bg-blue-100 text-blue-700 font-bold text-xs">PASO 02</span>
+                        <h2 class="text-2xl md:text-3xl font-extrabold text-gradient">Segmentación de Rejillas (YOLO Segmentation)</h2>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs flex flex-col justify-between">
+                            <div>
+                                <h3 class="font-bold text-slate-800 text-base mb-2">Máscaras y Polígonos Físicos</h3>
+                                <p class="text-slate-600 text-xs md:text-sm leading-relaxed mb-4">
+                                    Para saber cuán profundo está el producto, necesitamos un punto de referencia en el fondo del congelador: <strong>las rejillas metálicas o separadores</strong>. Mediante un modelo secundario de segmentación, se generan máscaras exactas de cada rejilla.
+                                </p>
+                            </div>
+                            <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs text-slate-600 code-font">
+                                <span class="text-blue-600 font-bold block mb-1">Palabras Clave de Rejilla:</span>
+                                <code>rejilla, canastilla, separador, carril, parrilla</code>
+                            </div>
+                        </div>
+
+                        <div class="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs flex flex-col justify-between">
+                            <div>
+                                <h3 class="font-bold text-slate-800 text-base mb-2">k-NN Espacial para Coordenadas</h3>
+                                <p class="text-slate-600 text-xs md:text-sm leading-relaxed mb-4">
+                                    Con los píxeles de las máscaras de rejilla, construimos un índice espacial <strong>cKDTree</strong>. Cuando evaluamos un producto, buscamos los K píxeles de rejilla más cercanos en milisegundos para extraer su profundidad base.
+                                </p>
+                            </div>
+                            <div class="flex items-center space-x-3 bg-purple-50/50 p-3 rounded-xl border border-purple-100 text-xs text-purple-900 code-font">
+                                <i class="fa-solid fa-network-wired text-purple-600 text-lg"></i>
+                                <span>Búsqueda ultra-rápida de vecinos cercanos (k-NN)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SLIDE 5: PASO 3 - PROFUNDIDAD MÉTRICA -->
+            <div class="slide w-full h-full flex-col justify-center px-2 md:px-6" data-slide="5">
+                <div class="max-w-4xl mx-auto w-full">
+                    <div class="flex items-center space-x-3 mb-4">
+                        <span class="px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 font-bold text-xs">PASO 03</span>
+                        <h2 class="text-2xl md:text-3xl font-extrabold text-gradient">Mapa de Profundidad Métrica (Depth Anything V2)</h2>
+                    </div>
+
+                    <div class="p-5 rounded-2xl bg-white border border-rose-100 shadow-xs mb-4">
+                        <p class="text-slate-600 text-xs md:text-sm leading-relaxed mb-4">
+                            Utilizamos el modelo de última generación <strong>Depth Anything V2</strong> para transformar la imagen 2D en un mapa de profundidad métrico expresado en centímetros (cm). Esto nos permite medir con exactitud la distancia tridimensional desde la cámara hasta la cima del producto y hasta la rejilla de fondo.
+                        </p>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                            <div class="bg-rose-50/40 p-3 rounded-xl border border-rose-100">
+                                <span class="text-rose-600 font-bold block mb-1">1. Profundidad del SKU</span>
+                                <span class="text-slate-600">Se extrae del 25% superior de la caja (percentil 90 para mayor precisión).</span>
+                            </div>
+                            <div class="bg-emerald-50/40 p-3 rounded-xl border border-emerald-100">
+                                <span class="text-emerald-600 font-bold block mb-1">2. Profundidad de Rejilla</span>
+                                <span class="text-slate-600">Obtenida mediante k-NN espacial puro filtrando el metal frontal (&gt;7.0 cm).</span>
+                            </div>
+                            <div class="bg-purple-50/40 p-3 rounded-xl border border-purple-100">
+                                <span class="text-purple-600 font-bold block mb-1">3. Rango Físico Real</span>
+                                <span class="text-slate-600">Escalado calibrado para congeladores comerciales (entre 5 cm y 30 cm de fondo).</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SLIDE 6: CÁLCULO MATEMÁTICO -->
+            <div class="slide w-full h-full flex-col justify-center px-2 md:px-6" data-slide="6">
+                <div class="max-w-4xl mx-auto w-full">
+                    <div class="flex items-center space-x-3 mb-4">
+                        <span class="px-3 py-1 rounded-full bg-purple-100 text-purple-700 font-bold text-xs">MATEMÁTICA DEL SISTEMA</span>
+                        <h2 class="text-2xl md:text-3xl font-extrabold text-gradient">Cálculo de Faltantes e Inventario Estimado</h2>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                        <div class="p-4 rounded-2xl bg-white border border-rose-100 shadow-xs">
+                            <span class="text-rose-600 text-xs font-bold uppercase tracking-wider">1. Diferencia en cm</span>
+                            <div class="code-font text-slate-800 text-sm md:text-base mt-2 font-bold">
+                                Δcm = | Prof<sub>sku</sub> - Prof<sub>rejilla</sub> |
+                            </div>
+                            <p class="text-xs text-slate-500 mt-2">Distancia vertical real entre el producto visible y el fondo.</p>
+                        </div>
+
+                        <div class="p-4 rounded-2xl bg-white border border-purple-100 shadow-xs">
+                            <span class="text-purple-600 text-xs font-bold uppercase tracking-wider">2. Piezas Faltantes</span>
+                            <div class="code-font text-slate-800 text-sm md:text-base mt-2 font-bold">
+                                Faltantes = round(Δcm / Paso)
+                            </div>
+                            <p class="text-xs text-slate-500 mt-2">Paso de profundidad por SKU = 2.0 cm por unidad aprox.</p>
+                        </div>
+
+                        <div class="p-4 rounded-2xl bg-white border border-emerald-100 shadow-xs">
+                            <span class="text-emerald-600 text-xs font-bold uppercase tracking-wider">3. Stock Estimado</span>
+                            <div class="code-font text-slate-800 text-sm md:text-base mt-2 font-bold">
+                                Stock = Capacidad - Faltantes
+                            </div>
+                            <p class="text-xs text-slate-500 mt-2">Capacidad máxima por carril = 12 unidades estándar.</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-rose-50/60 border border-rose-200 p-3.5 rounded-xl text-xs text-slate-700 code-font flex items-center justify-between">
+                        <div>
+                            <span class="text-rose-600 font-bold">Ejemplo Práctico:</span> Si caben 12 piezas en total y faltan 3 para llegar a la rejilla (6 cm de espacio libre con paso de 2cm), el inventario estimado es de <strong class="text-slate-900">9 piezas</strong> en esa columna.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SLIDE 7: ARQUITECTURA BACKEND -->
+            <div class="slide w-full h-full flex-col justify-center px-2 md:px-6" data-slide="7">
+                <div class="max-w-4xl mx-auto w-full">
+                    <div class="flex items-center space-x-3 mb-4">
+                        <span class="px-3 py-1 rounded-full bg-cyan-100 text-cyan-800 font-bold text-xs">ARQUITECTURA</span>
+                        <h2 class="text-2xl md:text-3xl font-extrabold text-gradient">Stack Tecnológico & FastAPI Backend</h2>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="p-5 rounded-2xl bg-white border border-rose-100 shadow-xs">
+                            <h3 class="font-bold text-slate-800 text-base mb-3 flex items-center space-x-2">
+                                <i class="fa-solid fa-server text-rose-500"></i>
+                                <span>Endpoint `/predict` (FastAPI)</span>
+                            </h3>
+                            <ul class="space-y-2 text-slate-600 text-xs md:text-sm">
+                                <li class="flex items-center space-x-2">
+                                    <i class="fa-solid fa-bolt text-rose-500"></i>
+                                    <span>Soporte asíncrono y CORS configurado para S3/Local.</span>
+                                </li>
+                                <li class="flex items-center space-x-2">
+                                    <i class="fa-solid fa-bolt text-rose-500"></i>
+                                    <span>Procesamiento de EXIF y conversión a RGB con Pillow.</span>
+                                </li>
+                                <li class="flex items-center space-x-2">
+                                    <i class="fa-solid fa-bolt text-rose-500"></i>
+                                    <span>Devolución de imágenes anotadas en Base64 (Bounding Boxes, Segmentaciones y Mapas térmicos).</span>
+                                </li>
+                            </ul>
+                        </div>
+
+                        <div class="p-5 rounded-2xl bg-white border border-blue-100 shadow-xs">
+                            <h3 class="font-bold text-slate-800 text-base mb-3 flex items-center space-x-2">
+                                <i class="fa-solid fa-microchip text-blue-500"></i>
+                                <span>Librerías y Modelos Clave</span>
+                            </h3>
+                            <div class="grid grid-cols-2 gap-2 text-xs code-font">
+                                <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-rose-600 font-medium">PyTorch / Ultralytics YOLO</div>
+                                <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-blue-600 font-medium">Transformers (Depth Anything V2)</div>
+                                <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-purple-600 font-medium">SciPy (cKDTree k-NN)</div>
+                                <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-emerald-600 font-medium">OpenCV / NumPy</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- Bottom Footer Navigation Controls -->
+    <footer class="w-full px-8 py-4 flex items-center justify-between border-t border-[#f3e8e2] bg-[#fbf9f5]/90 backdrop-blur-md z-20 shadow-xs">
+        <button onclick="prevSlide()" id="prev-btn" class="px-5 py-2.5 rounded-xl bg-white border border-[#e2d4cd] text-slate-700 hover:bg-slate-50 transition-all flex items-center space-x-2 text-sm font-medium">
+            <i class="fa-solid fa-arrow-left"></i>
+            <span>Anterior</span>
+        </button>
+
+        <div class="text-xs text-slate-400 hidden md:block">
+            Usa las flechas del teclado <strong>←</strong> y <strong>→</strong> para navegar
+        </div>
+
+        <button onclick="nextSlide()" id="next-btn" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-rose-500 to-pink-600 text-white font-semibold shadow-md shadow-rose-500/20 hover:shadow-rose-500/40 transition-all flex items-center space-x-2 text-sm">
+            <span>Siguiente</span>
+            <i class="fa-solid fa-arrow-right"></i>
+        </button>
+    </footer>
+
+    <!-- MODAL PARA VISUALIZAR EL FLUJO DE LAS FOTOS 1 a 3 -->
+    <div id="flow-modal" class="fixed inset-0 bg-slate-900/65 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-3xl w-full border border-rose-100 shadow-2xl overflow-hidden flex flex-col transform transition-all scale-95 opacity-0 duration-300" id="modal-content">
+            <!-- Modal Header -->
+            <div class="px-6 py-4 border-b border-rose-100 flex items-center justify-between bg-rose-50/40">
+                <div class="flex items-center space-x-2">
+                    <span class="w-3 h-3 rounded-full bg-rose-500"></span>
+                    <h3 class="font-bold text-slate-800 text-base md:text-lg" id="modal-title">Flujo del Sistema IA (1.png)</h3>
+                </div>
+                <button onclick="closeFlowModal()" class="w-8 h-8 rounded-full bg-white border border-rose-200 text-slate-500 hover:text-rose-600 flex items-center justify-center transition-all">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Modal Body (Image Container) -->
+            <div class="p-6 flex flex-col items-center justify-center bg-slate-50/50">
+                <div class="w-full h-[360px] md:h-[400px] rounded-2xl overflow-hidden border border-rose-200 bg-black flex items-center justify-center relative shadow-inner">
+                    <img id="flow-image" src="1.png" alt="Flujo IA" class="max-h-full max-w-full object-contain transition-all duration-300">
+                    
+                    <!-- Overlay Badge for Image Counter -->
+                    <div class="absolute bottom-3 right-3 bg-slate-900/80 text-white px-3 py-1 rounded-full text-xs font-mono backdrop-blur-md border border-white/10" id="modal-counter">
+                        Imagen 1 de 3
+                    </div>
+                </div>
+                <p class="text-xs text-slate-500 text-center mt-3" id="modal-desc">
+                    Salida de Detección de Cajas (YOLO OBB) identificando marcas, SKU y porcentajes de confianza en la superficie.
+                </p>
+            </div>
+
+            <!-- Modal Footer Controls -->
+            <div class="px-6 py-4 border-t border-rose-100 bg-white flex items-center justify-between">
+                <button onclick="prevFlowImage()" class="px-4 py-2 rounded-xl bg-white border border-rose-200 text-slate-700 hover:bg-rose-50 transition-all flex items-center space-x-2 text-xs md:text-sm font-medium">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    <span>Anterior</span>
+                </button>
+
+                <!-- Dots for modal -->
+                <div class="flex items-center space-x-2" id="modal-dots">
+                    <button onclick="goToFlowImage(1)" class="w-3 h-3 rounded-full bg-rose-500 transition-all"></button>
+                    <button onclick="goToFlowImage(2)" class="w-3 h-3 rounded-full bg-slate-300 transition-all"></button>
+                    <button onclick="goToFlowImage(3)" class="w-3 h-3 rounded-full bg-slate-300 transition-all"></button>
+                </div>
+
+                <button onclick="nextFlowImage()" class="px-4 py-2 rounded-xl bg-gradient-to-r from-rose-500 to-pink-600 text-white font-semibold shadow-md shadow-rose-500/20 hover:shadow-rose-500/40 transition-all flex items-center space-x-2 text-xs md:text-sm">
+                    <span>Siguiente</span>
+                    <i class="fa-solid fa-arrow-right"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Interactive Script -->
+    <script>
+        let currentSlide = 1;
+        const totalSlides = 7;
+
+        const dotsContainer = document.getElementById('dots-container');
+        const slideCounter = document.getElementById('slide-counter');
+        const prevBtn = document.getElementById('prev-btn');
+        const nextBtn = document.getElementById('next-btn');
+
+        // Initialize navigation dots
+        for (let i = 1; i <= totalSlides; i++) {
+            const dot = document.createElement('button');
+            dot.className = `w-2.5 h-2.5 rounded-full transition-all duration-300 ${i === 1 ? 'bg-rose-500 w-6' : 'bg-slate-300 hover:bg-slate-400'}`;
+            dot.setAttribute('onclick', `goToSlide(${i})`);
+            dot.title = `Ir a diapositiva ${i}`;
+            dotsContainer.appendChild(dot);
+        }
+
+        function updateSlides() {
+            // Hide all slides
+            document.querySelectorAll('.slide').forEach(slide => {
+                slide.classList.remove('active');
+            });
+
+            // Show active slide
+            const activeSlideEl = document.querySelector(`.slide[data-slide="${currentSlide}"]`);
+            if (activeSlideEl) {
+                activeSlideEl.classList.add('active');
+            }
+
+            // Update counter text
+            slideCounter.textContent = `${String(currentSlide).padStart(2, '0')} / ${String(totalSlides).padStart(2, '0')}`;
+
+            // Update dots
+            const dots = dotsContainer.children;
+            for (let i = 0; i < dots.length; i++) {
+                if (i + 1 === currentSlide) {
+                    dots[i].className = 'w-6 h-2.5 rounded-full bg-rose-500 transition-all duration-300';
+                } else {
+                    dots[i].className = 'w-2.5 h-2.5 rounded-full bg-slate-300 hover:bg-slate-400 transition-all duration-300';
+                }
+            }
+
+            // Button states
+            prevBtn.style.opacity = currentSlide === 1 ? '0.5' : '1';
+            nextBtn.style.opacity = currentSlide === totalSlides ? '0.5' : '1';
+        }
+
+        function nextSlide() {
+            if (currentSlide < totalSlides) {
+                currentSlide++;
+                updateSlides();
+            }
+        }
+
+        function prevSlide() {
+            if (currentSlide > 1) {
+                currentSlide--;
+                updateSlides();
+            }
+        }
+
+        function goToSlide(slideNum) {
+            if (slideNum >= 1 && slideNum <= totalSlides) {
+                currentSlide = slideNum;
+                updateSlides();
+            }
+        }
+
+        // Keyboard event listeners for arrow navigation (only if modal is closed)
+        document.addEventListener('keydown', (e) => {
+            const modal = document.getElementById('flow-modal');
+            const isModalOpen = !modal.classList.contains('hidden');
+
+            if (isModalOpen) {
+                if (e.key === 'ArrowRight') nextFlowImage();
+                if (e.key === 'ArrowLeft') prevFlowImage();
+                if (e.key === 'Escape') closeFlowModal();
+                return;
+            }
+
+            if (e.key === 'ArrowRight' || e.key === 'Space') {
+                nextSlide();
+            } else if (e.key === 'ArrowLeft') {
+                prevSlide();
+            }
+        });
+
+        // --- MODAL FLOW LOGIC FOR IMAGES 1 TO 3 ---
+        let currentFlowImg = 1;
+        const flowData = [
+            {
+                file: '1.png',
+                title: 'Detección de Productos (YOLO OBB)',
+                desc: 'Salida del modelo identificando cajas rotadas, marcas y porcentajes de confianza en la superficie del congelador.'
+            },
+            {
+                file: '2.png',
+                title: 'Imagen Original y Rejillas de Referencia',
+                desc: 'Vista cenital limpia del congelador comercial mostrando los carriles y separadores metálicos de fondo.'
+            },
+            {
+                file: '3.png',
+                title: 'Mapa de Profundidad Métrica (Depth Anything V2)',
+                desc: 'Transformación a mapa térmico de profundidad en centímetros para medir con exactitud la distancia vertical a la rejilla.'
+            }
+        ];
+
+        function openFlowModal() {
+            const modal = document.getElementById('flow-modal');
+            const content = document.getElementById('modal-content');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            setTimeout(() => {
+                content.classList.remove('scale-95', 'opacity-0');
+                content.classList.add('scale-100', 'opacity-100');
+            }, 10);
+            goToFlowImage(1);
+        }
+
+        function closeFlowModal() {
+            const modal = document.getElementById('flow-modal');
+            const content = document.getElementById('modal-content');
+            content.classList.remove('scale-100', 'opacity-100');
+            content.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                modal.classList.remove('flex');
+                modal.classList.add('hidden');
+            }, 200);
+        }
+
+        function updateFlowModalView() {
+            const data = flowData[currentFlowImg - 1];
+            document.getElementById('flow-image').src = data.file;
+            document.getElementById('modal-title').textContent = `Flujo del Sistema IA (${data.file})`;
+            document.getElementById('modal-desc').textContent = data.desc;
+            document.getElementById('modal-counter').textContent = `Imagen ${currentFlowImg} de 3`;
+
+            // Update modal dots
+            const modalDots = document.getElementById('modal-dots').children;
+            for (let i = 0; i < modalDots.length; i++) {
+                if (i + 1 === currentFlowImg) {
+                    modalDots[i].className = 'w-6 h-3 rounded-full bg-rose-500 transition-all';
+                } else {
+                    modalDots[i].className = 'w-3 h-3 rounded-full bg-slate-300 hover:bg-slate-400 transition-all';
+                }
+            }
+        }
+
+        function nextFlowImage() {
+            if (currentFlowImg < 3) {
+                currentFlowImg++;
+                updateFlowModalView();
+            } else {
+                currentFlowImg = 1; // Loop back to start
+                updateFlowModalView();
+            }
+        }
+
+        function prevFlowImage() {
+            if (currentFlowImg > 1) {
+                currentFlowImg--;
+                updateFlowModalView();
+            } else {
+                currentFlowImg = 3; // Loop to end
+                updateFlowModalView();
+            }
+        }
+
+        function goToFlowImage(num) {
+            if (num >= 1 && num <= 3) {
+                currentFlowImg = num;
+                updateFlowModalView();
+            }
+        }
+    </script>
+</body>
+</html>

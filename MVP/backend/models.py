@@ -1,5 +1,14 @@
 from typing import Dict
 import torch
+
+# Parche de compatibilidad para Transformers y versiones de PyTorch < 2.6
+if not hasattr(torch, "accelerator"):
+    class _MockAccelerator:
+        @staticmethod
+        def current_accelerator():
+            return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    torch.accelerator = _MockAccelerator()
+
 from ultralytics import YOLO
 from transformers import pipeline
 from config import MODEL_PATH, SEG_MODEL_PATH, CLASSES_PATH

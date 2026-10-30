@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Freezer Audit - IA</title>
+    <style>
+        :root {
+            --bg-main: #0B0F19;
+            --bg-card: #1F2937;
+            --bg-appbar: #111827;
+            --border-color: #374151;
+            --text-main: #E5E7EB;
+            --text-muted: #9CA3AF;
+            --blue: #38BDF8;
+            --green: #34D399;
+            --amber: #F59E0B;
+            --red: #EF4444;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
+        body { background-color: var(--bg-main); color: var(--text-main); padding-bottom: 50px; }
+        .appbar {
+            background-color: var(--bg-appbar);
+            padding: 16px 24px;
+            text-align: center;
+            border-bottom: 1px solid var(--border-color);
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.5);
+            margin-bottom: 25px;
+        }
+        .appbar h1 { font-size: 20px; font-weight: 600; color: #fff; display: flex; align-items: center; justify-content: center; gap: 10px; }
+        .container { max-width: 1100px; margin: 0 auto; padding: 0 15px; display: flex; flex-direction: column; gap: 22px; align-items: center; }
+        
+        .input-group { width: 100%; }
+        .input-group label { display: block; font-size: 13px; color: var(--blue); margin-bottom: 6px; font-weight: 600; }
+        .input-serie {
+            width: 100%; padding: 14px 16px; background-color: var(--bg-card);
+            border: 1.5px solid var(--blue); border-radius: 10px; color: #fff; font-size: 15px; outline: none;
+            transition: border-color 0.2s;
+        }
+        .input-serie:focus { border-color: var(--green); }
+
+        .upload-zone {
+            width: 100%; height: 170px; background-color: var(--bg-card);
+            border: 2px dashed var(--border-color); border-radius: 15px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            cursor: pointer; transition: all 0.2s; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.5);
+        }
+        .upload-zone:hover { border-color: var(--blue); background-color: #263244; }
+        .upload-icon { font-size: 42px; color: var(--blue); margin-bottom: 8px; }
+        .upload-title { font-size: 17px; font-weight: 500; color: var(--text-main); }
+        .upload-sub { font-size: 13px; color: #6B7280; margin-top: 4px; }
+
+        .loading { display: none; align-items: center; gap: 12px; margin: 10px 0; color: var(--text-muted); }
+        .spinner {
+            width: 22px; height: 22px; border: 3px solid rgba(56, 189, 248, 0.2);
+            border-top-color: var(--blue); border-radius: 50%; animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .alert {
+            display: none; width: 100%; padding: 15px; border-radius: 10px;
+            text-align: center; font-weight: 500; font-size: 15px;
+        }
+        .alert.success { background-color: #064E3B; border: 1px solid #059669; color: #6EE7B7; }
+        .alert.warning { background-color: #451A03; border: 1px solid #D97706; color: #FCD34D; }
+        .alert.error { background-color: #450A0A; border: 1px solid #DC2626; color: #FCA5A5; }
+
+        .media-row { display: none; width: 100%; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; }
+        .media-card {
+            background-color: var(--bg-card); border: 1px solid var(--border-color);
+            border-radius: 15px; padding: 14px; text-align: center;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.6);
+        }
+        .media-card h3 { font-size: 15px; margin-bottom: 12px; }
+        .media-box { width: 100%; height: 260px; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 10px; background: #090D16; }
+        .media-box img, .media-box video { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; }
+
+        .tables-card {
+            display: none; width: 100%; background-color: var(--bg-card);
+            border: 1px solid var(--border-color); border-radius: 15px; padding: 24px;
+            box-shadow: 0 15px 25px -5px rgba(0,0,0,0.7);
+        }
+        .section-title { font-size: 19px; font-weight: 600; margin-bottom: 6px; text-align: center; }
+        .section-sub { font-size: 13px; color: var(--text-muted); text-align: center; margin-bottom: 12px; }
+        .divider { height: 1px; background-color: var(--border-color); margin: 12px 0 16px 0; }
+        .table-wrap { max-height: 300px; overflow-y: auto; border-radius: 10px; border: 1px solid var(--border-color); }
+        table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
+        th { background-color: #374151; color: var(--text-main); padding: 12px 15px; position: sticky; top: 0; }
+        td { padding: 10px 15px; border-bottom: 1px solid #2D3748; color: #D1D5DB; }
+        tr:hover td { background-color: rgba(255,255,255,0.03); }
+        .num { text-align: right; }
+    </style>
+</head>
+<body>
+    <div class="appbar">
+        <h1>🍦 Smart Freezer Audit - Detección, Segmentación y Profundidad</h1>
+    </div>
+
+    <div class="container">
+        <div class="input-group">
+            <label for="inputSerie">Número de Serie del Congelador</label>
+            <input type="text" id="inputSerie" class="input-serie" placeholder="Ej: SERIE_A001 o A001 (Dejar en blanco para DEFAULT)">
+        </div>
+
+        <input type="file" id="fileInput" accept=".png,.jpg,.jpeg,.webp,.bmp,.mp4,.avi,.mov,.webm,.mkv" style="display: none;">
+        <div class="upload-zone" onclick="document.getElementById('fileInput').click()">
+            <div class="upload-icon">☁️</div>
+            <div class="upload-title">Haz clic aquí para subir una foto o video</div>
+            <div class="upload-sub">Soporta JPG, PNG, MP4, AVI, MOV</div>
+        </div>
+
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <span>Procesando imagen/video con los modelos de IA...</span>
+        </div>
+
+        <div id="alertBanner" class="alert"></div>
+
+        <div id="mediaRow" class="media-row">
+            <div class="media-card">
+                <h3 id="labelDet" style="color: var(--blue);">Detección (Boxes)</h3>
+                <div id="boxDet" class="media-box"></div>
+            </div>
+            <div class="media-card">
+                <h3 id="labelSeg" style="color: var(--green);">Segmentación (Polígonos)</h3>
+                <div id="boxSeg" class="media-box"></div>
+            </div>
+            <div class="media-card">
+                <h3 id="labelDepth" style="color: var(--amber);">Mapa de Profundidad</h3>
+                <div id="boxDepth" class="media-box"></div>
+            </div>
+        </div>
+
+        <div id="tablesCard" class="tables-card">
+            <div class="section-title" style="color: var(--blue);">Resumen General de Inventario</div>
+            <div class="divider"></div>
+            <div class="table-wrap" style="margin-bottom: 28px;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Producto Identificado</th>
+                            <th class="num">Detecciones YOLO</th>
+                            <th class="num">Stock Estimado Total</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbodyResults"></tbody>
+                </table>
+            </div>
+
+            <div class="section-title" style="color: var(--amber);">Desglose Detallado por Objeto Detectado</div>
+            <div class="section-sub">Muestra la estimación individual generada para cada Bounding Box de YOLO</div>
+            <div class="divider"></div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID Det.</th>
+                            <th>SKU Detectado</th>
+                            <th class="num">Confianza</th>
+                            <th class="num">Capacidad Máx.</th>
+                            <th class="num">Faltantes</th>
+                            <th class="num">Stock Estimado</th>
+                            <th>Prof. SKU / Rejilla</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbodyDetails"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const inputSerie = document.getElementById('inputSerie');
+        const loading = document.getElementById('loading');
+        const alertBanner = document.getElementById('alertBanner');
+        const mediaRow = document.getElementById('mediaRow');
+        const tablesCard = document.getElementById('tablesCard');
+
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            mediaRow.style.display = 'none';
+            tablesCard.style.display = 'none';
+            alertBanner.style.display = 'none';
+            loading.style.display = 'flex';
+
+            const serieVal = inputSerie.value.trim() || 'DEFAULT';
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('numero_serie', serieVal);
+
+            // Determinar la URL correcta de /predict para Databricks Driver Proxy o entorno local
+            let apiUrl = 'predict';
+            if (window.location.protocol.startsWith('http')) {
+                let currentPath = window.location.pathname;
+                // Si la ruta termina en index.html, quitamos el nombre del archivo
+                if (currentPath.endsWith('/index.html') || currentPath.endsWith('index.html')) {
+                    currentPath = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
+                }
+                // Asegurar diagonal final para no perder el puerto en el proxy
+                if (!currentPath.endsWith('/')) {
+                    currentPath += '/';
+                }
+                apiUrl = window.location.origin + currentPath + 'predict';
+            } else {
+                apiUrl = 'http://127.0.0.1:8000/predict';
+            }
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const contentType = response.headers.get('content-type') || '';
+                let data;
+                if (contentType.includes('application/json')) {
+                    data = await response.json();
+                } else {
+                    const errorText = await response.text();
+                    throw new Error(`Respuesta no-JSON (${response.status}): ${errorText.substring(0, 180)}`);
+                }
+
+                if (response.ok) {
+                    const esVideo = data.tipo === 'video' || Boolean(data.video_det_base64);
+
+                    const boxDet = document.getElementById('boxDet');
+                    const boxSeg = document.getElementById('boxSeg');
+                    const boxDepth = document.getElementById('boxDepth');
+
+                    if (esVideo) {
+                        document.getElementById('labelDet').textContent = 'Video: Detección (Boxes)';
+                        document.getElementById('labelSeg').textContent = 'Video: Segmentación (Polígonos)';
+                        document.getElementById('labelDepth').textContent = 'Video: Mapa de Profundidad';
+
+                        boxDet.innerHTML = `<video controls autoplay loop muted src="data:video/mp4;base64,${data.video_det_base64}"></video>`;
+                        boxSeg.innerHTML = `<video controls autoplay loop muted src="data:video/mp4;base64,${data.video_seg_base64}"></video>`;
+                        boxDepth.innerHTML = `<video controls autoplay loop muted src="data:video/mp4;base64,${data.video_depth_base64}"></video>`;
+                    } else {
+                        document.getElementById('labelDet').textContent = 'Detección (Boxes)';
+                        document.getElementById('labelSeg').textContent = 'Segmentación (Polígonos)';
+                        document.getElementById('labelDepth').textContent = 'Mapa de Profundidad';
+
+                        boxDet.innerHTML = `<img src="data:image/jpeg;base64,${data.imagen_base64}">`;
+                        boxSeg.innerHTML = `<img src="data:image/jpeg;base64,${data.imagen_seg_base64}">`;
+                        boxDepth.innerHTML = `<img src="data:image/jpeg;base64,${data.imagen_depth_base64}">`;
+                    }
+
+                    mediaRow.style.display = 'grid';
+
+                    const tbodyResults = document.getElementById('tbodyResults');
+                    const tbodyDetails = document.getElementById('tbodyDetails');
+                    tbodyResults.innerHTML = '';
+                    tbodyDetails.innerHTML = '';
+
+                    const detecciones = data.detecciones || [];
+                    const detalles = data.detalle_detecciones || [];
+
+                    let totalPiezas = 0;
+                    let totalVisibles = 0;
+
+                    detecciones.forEach(item => {
+                        const stock = item.stock_estimado || 0;
+                        const visibles = item.visibles || 0;
+                        totalPiezas += stock;
+                        totalVisibles += visibles;
+
+                        tbodyResults.innerHTML += `
+                            <tr>
+                                <td>${item.etiqueta || 'Desconocido'}</td>
+                                <td class="num" style="color: var(--blue); font-weight: bold;">${visibles}</td>
+                                <td class="num" style="color: var(--green); font-weight: bold;">${stock}</td>
+                            </tr>`;
+                    });
+
+                    detalles.forEach(det => {
+                        const profTxt = det.profundidad_texto || 'N/A';
+                        tbodyDetails.innerHTML += `
+                            <tr>
+                                <td style="color: var(--text-muted);">${det.id_deteccion || '-'}</td>
+                                <td>${det.sku || 'Desconocido'}</td>
+                                <td class="num" style="color: var(--blue);">${(det.confianza || 0).toFixed(2)}</td>
+                                <td class="num" style="color: var(--text-muted);">${det.capacidad_maxima || 0}</td>
+                                <td class="num" style="color: var(--red);">${det.faltantes_calculados || 0}</td>
+                                <td class="num" style="color: var(--green); font-weight: bold;">${det.inventario_estimado || 0}</td>
+                                <td style="color: var(--text-muted); font-size: 12px;">${profTxt}</td>
+                            </tr>`;
+                    });
+
+                    if (detalles.length > 0) {
+                        tablesCard.style.display = 'block';
+                        const tipoStr = esVideo ? 'Video' : 'Foto';
+                        alertBanner.className = 'alert success';
+                        alertBanner.textContent = `✅ Auditoría completada (${tipoStr} - ${serieVal}): ${totalVisibles} detectados por YOLO / ${totalPiezas} piezas estimadas.`;
+                    } else {
+                        alertBanner.className = 'alert warning';
+                        alertBanner.textContent = '⚠️ Congelador detectado vacío o productos irreconocibles.';
+                    }
+                } else {
+                    alertBanner.className = 'alert error';
+                    alertBanner.textContent = `❌ Error en el backend: ${data.detail || 'Error desconocido'}`;
+                }
+            } catch (err) {
+                alertBanner.className = 'alert error';
+                alertBanner.textContent = `❌ Error en la solicitud: ${err.message}`;
+            } finally {
+                loading.style.display = 'none';
+                alertBanner.style.display = 'block';
+                fileInput.value = '';
+            }
+        });
+    </script>
+</body>
+</html>

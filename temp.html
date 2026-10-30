@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scanning - Detección de SKUs con AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #0b0f19;
+            color: #f3f4f6;
+            overflow-x: hidden;
+        }
+        .slide {
+            display: none;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out;
+            transform: translateY(10px);
+        }
+        .slide.active {
+            display: flex;
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .glow-bg {
+            position: absolute;
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(14, 165, 233, 0.15) 0%, rgba(79, 70, 229, 0.05) 50%, transparent 70%);
+            z-index: 0;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between relative selection:bg-cyan-500 selection:text-white">
+
+    <!-- Fondo con brillo decorativo -->
+    <div class="glow-bg top-[-10%] left-[-10%] rounded-full blur-3xl"></div>
+    <div class="glow-bg bottom-[-10%] right-[-10%] rounded-full blur-3xl"></div>
+
+    <!-- Header / Barra Superior -->
+    <header class="w-full px-6 py-4 flex justify-between items-center z-10 border-b border-slate-800/60 bg-slate-950/40 backdrop-blur-md">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                </svg>
+            </div>
+            <div>
+                <h1 class="font-bold text-lg tracking-tight bg-gradient-to-r from-white via-slate-200 to-cyan-400 bg-clip-text text-transparent">Smart Freezer AI Audit</h1>
+                <p class="text-xs text-slate-400">Visión Artificial y Profundidad Métricas en Congeladores</p>
+            </div>
+        </div>
+
+        <!-- Indicador de Paginación / Puntos -->
+        <div class="hidden md:flex items-center space-x-2 bg-slate-900/80 px-4 py-2 rounded-full border border-slate-800">
+            <div class="w-2 h-2 rounded-full bg-cyan-400 transition-all duration-300" id="dot-0"></div>
+            <div class="w-2 h-2 rounded-full bg-slate-700 transition-all duration-300" id="dot-1"></div>
+            <div class="w-2 h-2 rounded-full bg-slate-700 transition-all duration-300" id="dot-2"></div>
+            <div class="w-2 h-2 rounded-full bg-slate-700 transition-all duration-300" id="dot-3"></div>
+            <div class="w-2 h-2 rounded-full bg-slate-700 transition-all duration-300" id="dot-4"></div>
+            <div class="w-2 h-2 rounded-full bg-slate-700 transition-all duration-300" id="dot-5"></div>
+            <div class="w-2 h-2 rounded-full bg-slate-700 transition-all duration-300" id="dot-6"></div>
+            <div class="w-2 h-2 rounded-full bg-slate-700 transition-all duration-300" id="dot-7"></div>
+        </div>
+
+        <div class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-cyan-400" id="slide-counter">
+            01 / 08
+        </div>
+    </header>
+
+    <!-- Contenedor Principal de Diapositivas -->
+    <main class="flex-grow flex items-center justify-center p-6 z-10 max-w-6xl mx-auto w-full">
+
+        <!-- DIAPOSITIVA 1: Inicio -->
+        <div class="slide active flex-col items-center text-center space-y-6 w-full" data-slide="0">
+            <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-medium tracking-wide uppercase">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                <span>Tecnología de Vanguardia en Retail Intelligence</span>
+            </div>
+            <h2 class="text-4xl md:text-6xl font-extrabold tracking-tight leading-tight">
+                Scanning<br>
+                <span class="bg-gradient-to-r from-cyan-400 via-indigo-400 to-purple-400 bg-clip-text text-transparent">Detección de SKUs con AI</span>
+            </h2>
+            <p class="max-w-2xl text-slate-400 text-base md:text-lg font-normal leading-relaxed">
+                Sistema automatizado de auditoría de inventario en congeladores comerciales combinando Visión por Computadora (YOLO) y Estimación de Profundidad Métricas en centímetros.
+            </p>
+            <div class="pt-4 flex flex-wrap justify-center gap-4">
+                <button onclick="nextSlide()" class="px-6.5 py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-semibold shadow-lg shadow-cyan-500/25 transition-all duration-200 flex items-center space-x-2 cursor-pointer">
+                    <span>Iniciar Presentación</span>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- DIAPOSITIVA 2: Resumen del Sistema -->
+        <div class="slide flex-col items-center w-full" data-slide="1">
+            <div class="w-full max-w-4xl bg-slate-900/70 border border-slate-800 rounded-2xl p-6 md:p-8 backdrop-blur-xl shadow-2xl space-y-6">
+                <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold">
+                    <span>Auditoría en Tiempo Real</span>
+                </div>
+                <h3 class="text-2xl md:text-3xl font-bold text-white">Resultado Global de la Auditoría</h3>
+                <div class="bg-emerald-950/40 border border-emerald-500/30 rounded-xl p-4 flex items-center space-x-3 text-emerald-300 text-sm md:text-base font-medium">
+                    <svg class="w-6 h-6 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <span>Auditoría completada: 28 detectados por YOLO / 273 piezas estimadas.</span>
+                </div>
+                <p class="text-slate-400 text-sm md:text-base leading-relaxed">
+                    El sistema automatiza completamente el conteo de congeladores analizando la superficie expuesta y calculando el volumen tridimensional interno de forma instantánea.
+                </p>
+            </div>
+        </div>
+
+        <!-- DIAPOSITIVA 3: Arquitectura de 3 Pasos -->
+        <div class="slide flex-col items-center w-full" data-slide="2">
+            <div class="w-full max-w-5xl space-y-8">
+                <div class="text-center space-y-2">
+                    <h3 class="text-3xl font-bold text-white">¿Cómo Funciona?</h3>
+                    <p class="text-slate-400">El pipeline opera mediante 3 pasos secuenciales de inteligencia artificial</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="bg-slate-900/60 border border-slate-800 p-6 rounded-2xl backdrop-blur-md flex flex-col space-y-3 hover:border-cyan-500/50 transition-colors">
+                        <div class="w-10 h-10 rounded-lg bg-cyan-500/10 text-cyan-400 flex items-center font-bold">01</div>
+                        <h4 class="text-lg font-semibold text-white">Detección Bounding Boxes</h4>
+                        <p class="text-slate-400 text-sm leading-relaxed">Identificación precisa de cada producto expuesto en la superficie superior utilizando modelos YOLO optimizados.</p>
+                    </div>
+                    <div class="bg-slate-900/60 border border-slate-800 p-6 rounded-2xl backdrop-blur-md flex flex-col space-y-3 hover:border-indigo-500/50 transition-colors">
+                        <div class="w-10 h-10 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center font-bold">02</div>
+                        <h4 class="text-lg font-semibold text-white">Segmentación de Rejilla</h4>
+                        <p class="text-slate-400 text-sm leading-relaxed">Segmentación geométrica de las canastillas y carriles internos para estructurar el espacio del congelador.</p>
+                    </div>
+                    <div class="bg-slate-900/60 border border-slate-800 p-6 rounded-2xl backdrop-blur-md flex flex-col space-y-3 hover:border-purple-500/50 transition-colors">
+                        <div class="w-10 h-10 rounded-lg bg-purple-500/10 text-purple-400 flex items-center font-bold">03</div>
+                        <h4 class="text-lg font-semibold text-white">Mapa de Profundidad</h4>
+                        <p class="text-slate-400 text-sm leading-relaxed">Cálculo de profundidad métrica en centímetros para medir la distancia desde la superficie hasta el fondo.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- DIAPOSITIVA 4: Detección (Boxes) con Imagen -->
+        <div class="slide flex-col items-center w-full" data-slide="3">
+            <div class="w-full max-w-4xl bg-slate-900/70 border border-slate-800 rounded-2xl p-6 backdrop-blur-xl space-y-4">
+                <h3 class="text-xl font-bold text-cyan-400 text-center">Paso 1: Detección de Productos (Boxes)</h3>
+                <div class="rounded-xl overflow-hidden border border-slate-800 bg-slate-950 flex justify-center">
+                    <img src="image_911016.png" alt="Detección Boxes" class="max-h-[380px] object-contain w-full">
+                </div>
+                <p class="text-slate-300 text-sm text-center">
+                    Se detecta cada producto de la cima de la pila con YOLO OBB (cajas rotadas), identificando el SKU exacto de helados y paletas con sus puntajes de confianza.
+                </p>
+            </div>
+        </div>
+
+        <!-- DIAPOSITIVA 5: Segmentación (Polígonos) con Imagen -->
+        <div class="slide flex-col items-center w-full" data-slide="4">
+            <div class="w-full max-w-4xl bg-slate-900/70 border border-slate-800 rounded-2xl p-6 backdrop-blur-xl space-y-4">
+                <h3 class="text-xl font-bold text-emerald-400 text-center">Paso 2: Segmentación de Canastillas (Polígonos)</h3>
+                <div class="rounded-xl overflow-hidden border border-slate-800 bg-slate-950 flex justify-center">
+                    <img src="image_9112bc.png" alt="Segmentación Polígonos" class="max-h-[380px] object-contain w-full">
+                </div>
+                <p class="text-slate-300 text-sm text-center">
+                    Se detectan las rejillas y canastillas superiores mediante modelos de segmentación para delimitar espacialmente cada carril del congelador comercial.
+                </p>
+            </div>
+        </div>
+
+        <!-- DIAPOSITIVA 6: Mapa de Profundidad con Imagen -->
+        <div class="slide flex-col items-center w-full" data-slide="5">
+            <div class="w-full max-w-4xl bg-slate-900/70 border border-slate-800 rounded-2xl p-6 backdrop-blur-xl space-y-4">
+                <h3 class="text-xl font-bold text-amber-400 text-center">Paso 3: Mapa de Profundidad Métrica</h3>
+                <div class="rounded-xl overflow-hidden border border-slate-800 bg-slate-950 flex justify-center">
+                    <img src="image_9112d8.png" alt="Mapa de Profundidad" class="max-h-[380px] object-contain w-full">
+                </div>
+                <p class="text-slate-300 text-sm text-center">
+                    Utilizando Depth Anything V2, se genera un mapa de calor que calcula la profundidad de cada producto en centímetros respecto al nivel de la rejilla.
+                </p>
+            </div>
+        </div>
+
+        <!-- DIAPOSITIVA 7: Lógica Matemática y Estimación -->
+        <div class="slide flex-col items-center w-full" data-slide="6">
+            <div class="w-full max-w-4xl bg-slate-900/70 border border-slate-800 rounded-2xl p-6 md:p-8 backdrop-blur-xl space-y-6">
+                <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-400 text-xs font-semibold">
+                    <span>Motor de Cálculo Algorítmico</span>
+                </div>
+                <h3 class="text-2xl md:text-3xl font-bold text-white">Cálculo de Faltantes y Stock Oculto</h3>
+                <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-5 text-slate-300 text-sm md:text-base leading-relaxed space-y-3">
+                    <p>
+                        Con la profundidad obtenida del bounding box y la referencia de la rejilla, se calcula la diferencia en centímetros. Cada unidad equivale a un paso estandarizado (ej. <code class="text-cyan-400 bg-slate-900 px-1.5 py-0.5 rounded">2.0 cm</code> por pieza).
+                    </p>
+                    <div class="p-3 bg-cyan-950/30 border border-cyan-500/30 rounded-lg text-cyan-200 text-xs md:text-sm font-mono">
+                        Ejemplo: Si caben un total de 12 piezas y faltan 3 centímetros para llegar a la rejilla, se calculan los faltantes y se estima el inventario real en profundidad de forma automática.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- DIAPOSITIVA 8: Conclusión / Cierre -->
+        <div class="slide flex-col items-center text-center space-y-6 w-full" data-slide="7">
+            <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-emerald-500 to-cyan-600 flex items-center justify-center shadow-xl shadow-emerald-500/20 mx-auto">
+                <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            </div>
+            <h3 class="text-3xl md:text-4xl font-extrabold text-white">¡Auditoría Inteligente Finalizada!</h3>
+            <p class="max-w-xl text-slate-400 text-base">
+                Transformamos imágenes de congeladores en analíticas de inventario precisas en segundos, optimizando la reposición de producto en tiendas de retail.
+            </p>
+            <div class="pt-4 flex justify-center space-x-4">
+                <button onclick="goToSlide(0)" class="px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-medium transition-colors border border-slate-700 cursor-pointer">
+                    Reiniciar Presentación
+                </button>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer / Barra de Navegación -->
+    <footer class="w-full px-6 py-4 flex justify-between items-center z-10 border-t border-slate-800/60 bg-slate-950/40 backdrop-blur-md">
+        <button onclick="prevSlide()" id="prev-btn" class="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 font-medium text-sm flex items-center space-x-2 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+            <span>Anterior</span>
+        </button>
+
+        <span class="text-xs text-slate-500 hidden sm:inline">Usa las flechas del teclado ← y → para navegar</span>
+
+        <button onclick="nextSlide()" id="next-btn" class="px-5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-sm flex items-center space-x-2 transition-all shadow-lg shadow-cyan-500/20 cursor-pointer">
+            <span>Siguiente</span>
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+        </button>
+    </footer>
+
+    <!-- Script de Control de Diapositivas -->
+    <script>
+        let currentSlide = 0;
+        const totalSlides = 8;
+
+        function updateSlides() {
+            const slides = document.querySelectorAll('.slide');
+            slides.forEach((slide, index) => {
+                if (index === currentSlide) {
+                    slide.classList.add('active');
+                } else {
+                    slide.classList.remove('active');
+                }
+            });
+
+            // Actualizar contador
+            document.getElementById('slide-counter.').innerText; // placeholder
+            document.getElementById('slide-counter').innerText = `0${currentSlide + 1} / 0${totalSlides}`;
+
+            // Actualizar puntos de navegación superior
+            for (let i = 0; i < totalSlides; i++) {
+                const dot = document.getElementById(`dot-${i}`);
+                if (dot) {
+                    if (i === currentSlide) {
+                        dot.classList.remove('bg-slate-700', 'w-2');
+                        dot.classList.add('bg-cyan-400', 'w-6');
+                    } else {
+                        dot.classList.remove('bg-cyan-400', 'w-6');
+                        dot.classList.add('bg-slate-700', 'w-2');
+                    }
+                }
+            }
+
+            // Estado de botones
+            document.getElementById('prev-btn').disabled = currentSlide === 0;
+            const nextBtn = document.getElementById('next-btn');
+            if (currentSlide === totalSlides - 1) {
+                nextBtn.style.opacity = '0.5';
+                nextBtn.style.pointerEvents = 'none';
+            } else {
+                nextBtn.style.opacity = '1';
+                nextBtn.style.pointerEvents = 'auto';
+            }
+        }
+
+        function nextSlide() {
+            if (currentSlide < totalSlides - 1) {
+                currentSlide++;
+                updateSlides();
+            }
+        }
+
+        function prevSlide() {
+            if (currentSlide > 0) {
+                currentSlide--;
+                updateSlides();
+            }
+        }
+
+        function goToSlide(index) {
+            currentSlide = index;
+            updateSlides();
+        }
+
+        // Navegación por teclado
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight' || e.key === 'Space') {
+                nextSlide();
+            } else if (e.key === 'ArrowLeft') {
+                prevSlide();
+            }
+        });
+
+        // Inicializar estado
+        updateSlides();
+    </script>
+</body>
+</html>
