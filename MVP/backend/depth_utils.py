@@ -211,7 +211,7 @@ def construir_imagen_poligonos_rejillas(
     # Agrupar segmentos verticales pertenecientes al mismo divisor de canastilla
     vert_segments.sort(key=lambda s: s["x_mid"])
     clusters = []
-    cluster_dist_thresh = ancho * 0.065
+    cluster_dist_thresh = ancho * 0.055
 
     for seg in vert_segments:
         if not clusters or abs(seg["x_mid"] - np.mean([s["x_mid"] for s in clusters[-1]])) > cluster_dist_thresh:
@@ -228,6 +228,8 @@ def construir_imagen_poligonos_rejillas(
         clusters = valid_clusters
 
     divisores = []
+    margen_div = max(5.0, ancho * 0.005)
+
     for c in clusters:
         all_xs = np.concatenate([s["xs"] for s in c if len(s["xs"]) > 0])
         all_ys = np.concatenate([s["ys"] for s in c if len(s["ys"]) > 0])
@@ -248,12 +250,12 @@ def construir_imagen_poligonos_rejillas(
         if len(all_xs) >= 10:
             res_all = all_xs - m * all_ys
             b = float(np.median(res_all))
-            b_izq = float(np.percentile(res_all, 20))
-            b_der = float(np.percentile(res_all, 80))
+            b_izq = float(np.percentile(res_all, 15)) - margen_div
+            b_der = float(np.percentile(res_all, 85)) + margen_div
         else:
             b = float(np.mean([s["x_mid"] for s in c]))
-            b_izq = b - 3.0
-            b_der = b + 3.0
+            b_izq = b - margen_div
+            b_der = b + margen_div
 
         divisores.append({
             "m": m,
@@ -276,8 +278,8 @@ def construir_imagen_poligonos_rejillas(
             b_ext = min_x_horiz - m_ext * y_mid_ref
             divisores.insert(0, {
                 "m": m_ext, "b": b_ext,
-                "m_izq": m_ext, "b_izq": b_ext,
-                "m_der": m_ext, "b_der": b_ext,
+                "m_izq": m_ext, "b_izq": b_ext - margen_div,
+                "m_der": m_ext, "b_der": b_ext + margen_div,
                 "x_mid": min_x_horiz,
                 "y_min": divisores[0]["y_min"],
                 "y_max": divisores[0]["y_max"],
@@ -287,8 +289,8 @@ def construir_imagen_poligonos_rejillas(
             b_ext = max_x_horiz - m_ext * y_mid_ref
             divisores.append({
                 "m": m_ext, "b": b_ext,
-                "m_izq": m_ext, "b_izq": b_ext,
-                "m_der": m_ext, "b_der": b_ext,
+                "m_izq": m_ext, "b_izq": b_ext - margen_div,
+                "m_der": m_ext, "b_der": b_ext + margen_div,
                 "x_mid": max_x_horiz,
                 "y_min": divisores[-1]["y_min"],
                 "y_max": divisores[-1]["y_max"],
@@ -313,13 +315,33 @@ def construir_imagen_poligonos_rejillas(
     else:
         y_top_global = alto * 0.15
 
+    # Ajustar una línea suave para el borde inferior usando los divisores que llegan hasta abajo,
+    # evitando cortes diagonales cuando un alambre individual está ocluido en la parte baja.
+    divisores_largos_abajo = (
+        [d for d in divisores if d["y_max"] >= np.percentile([x["y_max"] for x in divisores], 50)]
+        if divisores else []
+    )
+    if len(divisores_largos_abajo) >= 2:
+        xs_bot = np.array([d["x_mid"] for d in divisores_largos_abajo], dtype=np.float64)
+        ys_bot = np.array(
+            [float(alto) if d["y_max"] >= alto * 0.96 else d["y_max"] for d in divisores_largos_abajo],
+            dtype=np.float64,
+        )
+        m_bot_global, b_bot_global = np.polyfit(xs_bot, ys_bot, 1)
+        m_bot_global = float(np.clip(m_bot_global, -0.08, 0.08))
+        b_bot_global = float(np.median(ys_bot - m_bot_global * xs_bot))
+    else:
+        m_bot_global = 0.0
+        b_bot_global = float(alto)
+
     poligonos = []
     for i in range(len(divisores) - 1):
         d_izq = divisores[i]
         d_der = divisores[i + 1]
 
         ancho_canastilla = d_der["x_mid"] - d_izq["x_mid"]
-        if ancho_canastilla < ancho * 0.08:
+        # Evitar dibujar polígonos en huecos estrechos entre canastillas separadas
+        if ancho_canastilla < ancho * 0.12:
             continue
 
         bars_en_canastilla = [
@@ -333,23 +355,20 @@ def construir_imagen_poligonos_rejillas(
                 mt, bt = np.polyfit(bar_top["xs"].astype(np.float64), bar_top["ys"].astype(np.float64), 1)
                 mt = float(np.clip(mt, -0.15, 0.15))
                 res_t = bar_top["ys"] - (mt * bar_top["xs"] + bt)
-                bt_borde = bt + float(np.percentile(res_t, 75))
+                bt_borde = bt + float(np.percentile(res_t, 80)) + 2.0
                 x_approx_izq = d_izq["m_der"] * bar_top["y2"] + d_izq["b_der"]
                 x_approx_der = d_der["m_izq"] * bar_top["y2"] + d_der["b_izq"]
                 y_top_izq = mt * x_approx_izq + bt_borde
                 y_top_der = mt * x_approx_der + bt_borde
             else:
-                y_top_izq = bar_top["y2"]
-                y_top_der = bar_top["y2"]
+                y_top_izq = bar_top["y2"] + 2.0
+                y_top_der = bar_top["y2"] + 2.0
         else:
-            y_top_izq = max(y_top_global, min(d_izq["y_min"], alto * 0.25))
-            y_top_der = max(y_top_global, min(d_der["y_min"], alto * 0.25))
+            y_top_izq = y_top_global
+            y_top_der = y_top_global
 
-        y_bot_izq = float(alto) if d_izq["y_max"] >= alto * 0.96 else max(d_izq["y_max"], d_der["y_max"])
-        y_bot_der = float(alto) if d_der["y_max"] >= alto * 0.96 else max(d_der["y_max"], d_izq["y_max"])
-        if d_izq["y_max"] > alto * 0.70 and d_der["y_max"] > alto * 0.70:
-            y_bot_izq = float(alto) if d_izq["y_max"] >= alto * 0.96 else d_izq["y_max"]
-            y_bot_der = float(alto) if d_der["y_max"] >= alto * 0.96 else d_der["y_max"]
+        y_bot_izq = float(np.clip(m_bot_global * d_izq["x_mid"] + b_bot_global, alto * 0.80, alto))
+        y_bot_der = float(np.clip(m_bot_global * d_der["x_mid"] + b_bot_global, alto * 0.80, alto))
 
         x_tl = np.clip(d_izq["m_der"] * y_top_izq + d_izq["b_der"], 0, ancho - 1)
         x_tr = np.clip(d_der["m_izq"] * y_top_der + d_der["b_izq"], 0, ancho - 1)
@@ -374,8 +393,8 @@ def construir_imagen_poligonos_rejillas(
         if x_max_r - x_min_r > 40 and y_max_r - y_min_r > 40:
             w_col = (x_max_r - x_min_r) // 4
             for i in range(4):
-                cx1 = x_min_r + i * w_col + 4
-                cx2 = x_min_r + (i + 1) * w_col - 4
+                cx1 = x_min_r + i * w_col + 6
+                cx2 = x_min_r + (i + 1) * w_col - 6
                 pts = np.array([[cx1, y_min_r], [cx2, y_min_r], [cx2, y_max_r], [cx1, y_max_r]], dtype=np.int32)
                 poligonos.append(pts)
 
@@ -387,11 +406,90 @@ def construir_imagen_poligonos_rejillas(
     # Mantener intactos los barrotes de rejilla detectados por YOLO segmentación que delimitan los polígonos
     mask_protegida = np.maximum(mask_verticales_total, mask_top_horiz_total)
     if np.any(mask_protegida > 0):
-        kernel = np.ones((3, 3), np.uint8)
+        kernel = np.ones((5, 5), np.uint8)
         mask_dilatada = cv2.dilate(mask_protegida, kernel, iterations=1) > 0
         img_con_poligonos[mask_dilatada] = img_rgb[mask_dilatada]
 
     return Image.fromarray(img_con_poligonos), poligonos
+
+
+def calibrar_mapa_profundidad_plano(
+    depth_plano_raw: np.ndarray,
+    depth_cm_orig: np.ndarray,
+    rejillas: List[Dict],
+    poligonos: List[np.ndarray],
+) -> np.ndarray:
+    """
+    Calibra la salida de Depth Anything sobre la imagen con polígonos para que la
+    profundidad de cada polígono ('capa invisible' / tapa de canastilla) coincida
+    con la profundidad métrica real de las rejillas detectadas en esa canastilla.
+    """
+    alto, ancho = depth_cm_orig.shape
+    depth_calibrado = depth_cm_orig.copy()
+
+    ys_r_list, xs_r_list = [], []
+    for r in rejillas:
+        if r.get("mask") is not None:
+            yr, xr = np.where(r["mask"] > 0)
+            if len(xr) > 0:
+                xs_r_list.append(xr)
+                ys_r_list.append(yr)
+    if xs_r_list:
+        all_xr = np.concatenate(xs_r_list)
+        all_yr = np.concatenate(ys_r_list)
+    else:
+        all_xr = np.array([], dtype=np.int32)
+        all_yr = np.array([], dtype=np.int32)
+
+    for pts in poligonos:
+        mask_poly = np.zeros((alto, ancho), dtype=np.uint8)
+        cv2.fillPoly(mask_poly, [pts], 255)
+        kernel_borde = np.ones((15, 15), np.uint8)
+        mask_poly_ext = cv2.dilate(mask_poly, kernel_borde, iterations=1) > 0
+        mask_poly_bool = mask_poly > 0
+
+        if len(all_xr) > 0:
+            en_canastilla = mask_poly_ext[all_yr, all_xr]
+            xr_c = all_xr[en_canastilla]
+            yr_c = all_yr[en_canastilla]
+        else:
+            xr_c, yr_c = np.array([]), np.array([])
+
+        if len(xr_c) >= 20:
+            y_min_p, y_max_p = int(pts[:, 1].min()), int(pts[:, 1].max())
+            n_tramos = 6
+            y_bordes = np.linspace(y_min_p, y_max_p, n_tramos + 1)
+            tramo_y, tramo_z_orig = [], []
+            for ti in range(n_tramos):
+                en_t = (yr_c >= y_bordes[ti]) & (yr_c <= y_bordes[ti + 1])
+                if np.sum(en_t) >= 5:
+                    z_o = depth_cm_orig[yr_c[en_t], xr_c[en_t]]
+                    val_o = z_o[np.isfinite(z_o) & (z_o > 7.0)]
+                    if len(val_o) >= 3:
+                        tramo_y.append(0.5 * (y_bordes[ti] + y_bordes[ti + 1]))
+                        tramo_z_orig.append(float(np.percentile(val_o, 35)))
+
+            py_poly, px_poly = np.where(mask_poly_bool)
+            raw_vals = depth_plano_raw[py_poly, px_poly]
+            raw_med = float(np.median(raw_vals)) if len(raw_vals) > 0 else 15.0
+            raw_std = max(float(np.std(raw_vals)), 1.0) if len(raw_vals) > 0 else 1.0
+            delta_raw = np.clip((raw_vals - raw_med) / raw_std, -2.0, 2.0) * 0.5
+
+            if len(tramo_y) >= 2:
+                m_z, b_z = np.polyfit(np.array(tramo_y, dtype=np.float64), np.array(tramo_z_orig, dtype=np.float64), 1)
+                z_base = m_z * py_poly + b_z
+                z_rej = m_z * yr_c + b_z
+            else:
+                z_o_all = depth_cm_orig[yr_c, xr_c]
+                val_o_all = z_o_all[np.isfinite(z_o_all) & (z_o_all > 7.0)]
+                z_ref = float(np.percentile(val_o_all, 35)) if len(val_o_all) > 0 else 20.0
+                z_base = np.full_like(py_poly, z_ref, dtype=np.float32)
+                z_rej = np.full_like(yr_c, z_ref, dtype=np.float32)
+
+            depth_calibrado[py_poly, px_poly] = (z_base + delta_raw).astype(np.float32)
+            depth_calibrado[yr_c, xr_c] = z_rej.astype(np.float32)
+
+    return depth_calibrado
 
 
 def obtener_profundidad_rejilla_knn_pura(

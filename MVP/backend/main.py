@@ -20,6 +20,7 @@ from depth_utils import (
     extraer_coordenadas_rejillas,
     obtener_profundidad_rejilla_knn_pura,
     construir_imagen_poligonos_rejillas,
+    calibrar_mapa_profundidad_plano,
 )
 from video_utils import crear_panoramica_desde_video, procesar_video_con_modelos
 
@@ -185,10 +186,16 @@ async def predict(
         # 3. Primer mapa de calor: Depth Anything sobre la imagen original (profundidad de productos)
         depth_cm = calcular_mapa_profundidad_cm(pil_img)
 
-        # 4. Segundo mapa de calor: Crear imagen con polígonos delimitados por la segmentación YOLO de rejillas
-        #    y aplicarle Depth Anything para obtener la profundidad de referencia de las rejillas
-        pil_img_poligonos, _ = construir_imagen_poligonos_rejillas(pil_img, rejillas)
-        depth_plano_cm = calcular_mapa_profundidad_cm(pil_img_poligonos)
+        # 4. Segundo mapa de calor: Crear imagen con polígonos delimitados por la segmentación YOLO de rejillas,
+        #    aplicarle Depth Anything y calibrar su profundidad respecto a las rejillas detectadas (capa invisible)
+        pil_img_poligonos, poligonos_rejilla = construir_imagen_poligonos_rejillas(pil_img, rejillas)
+        depth_plano_raw = calcular_mapa_profundidad_cm(pil_img_poligonos)
+        depth_plano_cm = calibrar_mapa_profundidad_plano(
+            depth_plano_raw=depth_plano_raw,
+            depth_cm_orig=depth_cm,
+            rejillas=rejillas,
+            poligonos=poligonos_rejilla,
+        )
 
         # 5. Construcción del índice espacial k-NN con las coordenadas de las rejillas detectadas
         knn_data = extraer_coordenadas_rejillas(rejillas, ancho, alto)

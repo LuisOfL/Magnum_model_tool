@@ -242,9 +242,15 @@ def procesar_video_con_modelos(
                         })
 
             # Calcular estimación métrica con el segundo mapa de calor (polígonos de rejilla) y k=3
-            from depth_utils import construir_imagen_poligonos_rejillas
-            pil_frame_poligonos, _ = construir_imagen_poligonos_rejillas(pil_frame, rejillas_frame)
-            depth_plano_cm = depth_calc_func(pil_frame_poligonos)
+            from depth_utils import construir_imagen_poligonos_rejillas, calibrar_mapa_profundidad_plano
+            pil_frame_poligonos, poligonos_frame = construir_imagen_poligonos_rejillas(pil_frame, rejillas_frame)
+            depth_plano_raw = depth_calc_func(pil_frame_poligonos)
+            depth_plano_cm = calibrar_mapa_profundidad_plano(
+                depth_plano_raw=depth_plano_raw,
+                depth_cm_orig=depth_cm,
+                rejillas=rejillas_frame,
+                poligonos=poligonos_frame,
+            )
             plano_vis = cv2.normalize(depth_plano_cm, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
             plano_vis_inv = cv2.bitwise_not(plano_vis)
             frame_plano_bgr = cv2.applyColorMap(plano_vis_inv, cv2.COLORMAP_INFERNO)
