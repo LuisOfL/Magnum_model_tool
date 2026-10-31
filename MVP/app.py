@@ -59,69 +59,76 @@ def main(page: ft.Page):
     )
 
     # Controles para medios (Imágenes o Videos dinámicos)
-    img_result_det = ft.Image(width=330, height=260, fit=ft.ImageFit.CONTAIN, border_radius=ft.border_radius.all(10))
-    img_result_seg = ft.Image(width=330, height=260, fit=ft.ImageFit.CONTAIN, border_radius=ft.border_radius.all(10))
-    img_result_depth = ft.Image(width=330, height=260, fit=ft.ImageFit.CONTAIN, border_radius=ft.border_radius.all(10))
+    img_result_det = ft.Image(width=280, height=240, fit=ft.ImageFit.CONTAIN, border_radius=ft.border_radius.all(10))
+    img_result_seg = ft.Image(width=280, height=240, fit=ft.ImageFit.CONTAIN, border_radius=ft.border_radius.all(10))
+    img_result_depth = ft.Image(width=280, height=240, fit=ft.ImageFit.CONTAIN, border_radius=ft.border_radius.all(10))
+    img_result_plano = ft.Image(width=280, height=240, fit=ft.ImageFit.CONTAIN, border_radius=ft.border_radius.all(10))
 
-    media_box_det = ft.Container(content=img_result_det, width=330, height=260, alignment=ft.alignment.center)
-    media_box_seg = ft.Container(content=img_result_seg, width=330, height=260, alignment=ft.alignment.center)
-    media_box_depth = ft.Container(content=img_result_depth, width=330, height=260, alignment=ft.alignment.center)
+    media_box_det = ft.Container(content=img_result_det, width=280, height=240, alignment=ft.alignment.center)
+    media_box_seg = ft.Container(content=img_result_seg, width=280, height=240, alignment=ft.alignment.center)
+    media_box_depth = ft.Container(content=img_result_depth, width=280, height=240, alignment=ft.alignment.center)
+    media_box_plano = ft.Container(content=img_result_plano, width=280, height=240, alignment=ft.alignment.center)
 
-    label_det = ft.Text("Detección (Boxes)", size=15, weight=ft.FontWeight.W_600, color="#38BDF8")
+    label_det = ft.Text("Detección (Boxes)", size=14, weight=ft.FontWeight.W_600, color="#38BDF8")
     card_det = ft.Container(
         content=ft.Column(
-            controls=[
-                label_det,
-                media_box_det,
-            ],
+            controls=[label_det, media_box_det],
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=10,
+            spacing=8,
         ),
         bgcolor="#1F2937",
-        border_radius=15,
-        padding=12,
+        border_radius=12,
+        padding=10,
         border=ft.border.all(1, "#374151"),
-        shadow=ft.BoxShadow(blur_radius=15, color="#000000"),
+        shadow=ft.BoxShadow(blur_radius=12, color="#000000"),
     )
 
-    label_seg = ft.Text("Segmentación (Polígonos)", size=15, weight=ft.FontWeight.W_600, color="#34D399")
+    label_seg = ft.Text("Segmentación (Polígonos)", size=14, weight=ft.FontWeight.W_600, color="#34D399")
     card_seg = ft.Container(
         content=ft.Column(
-            controls=[
-                label_seg,
-                media_box_seg,
-            ],
+            controls=[label_seg, media_box_seg],
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=10,
+            spacing=8,
         ),
         bgcolor="#1F2937",
-        border_radius=15,
-        padding=12,
+        border_radius=12,
+        padding=10,
         border=ft.border.all(1, "#374151"),
-        shadow=ft.BoxShadow(blur_radius=15, color="#000000"),
+        shadow=ft.BoxShadow(blur_radius=12, color="#000000"),
     )
 
-    label_depth = ft.Text("Mapa de Profundidad", size=15, weight=ft.FontWeight.W_600, color="#F59E0B")
+    label_depth = ft.Text("Mapa Profundidad (SKUs)", size=14, weight=ft.FontWeight.W_600, color="#F59E0B")
     card_depth = ft.Container(
         content=ft.Column(
-            controls=[
-                label_depth,
-                media_box_depth,
-            ],
+            controls=[label_depth, media_box_depth],
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=10,
+            spacing=8,
         ),
         bgcolor="#1F2937",
-        border_radius=15,
-        padding=12,
+        border_radius=12,
+        padding=10,
         border=ft.border.all(1, "#374151"),
-        shadow=ft.BoxShadow(blur_radius=15, color="#000000"),
+        shadow=ft.BoxShadow(blur_radius=12, color="#000000"),
+    )
+
+    label_plano = ft.Text("Plano Rejilla (Tapa 3D)", size=14, weight=ft.FontWeight.W_600, color="#F43F5E")
+    card_plano = ft.Container(
+        content=ft.Column(
+            controls=[label_plano, media_box_plano],
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            spacing=8,
+        ),
+        bgcolor="#1F2937",
+        border_radius=12,
+        padding=10,
+        border=ft.border.all(1, "#374151"),
+        shadow=ft.BoxShadow(blur_radius=12, color="#000000"),
     )
 
     images_row = ft.Row(
-        controls=[card_det, card_seg, card_depth],
+        controls=[card_det, card_seg, card_depth, card_plano],
         alignment=ft.MainAxisAlignment.CENTER,
-        spacing=15,
+        spacing=12,
         visible=False,
         wrap=True,
     )
@@ -271,15 +278,18 @@ def main(page: ft.Page):
                 else:
                     label_det.value = "Detección (Boxes)"
                     label_seg.value = "Segmentación (Polígonos)"
-                    label_depth.value = "Mapa de Profundidad"
+                    label_depth.value = "Mapa Profundidad (SKUs)"
+                    label_plano.value = "Plano Rejilla (Tapa 3D)"
 
                     img_result_det.src_base64 = data["imagen_base64"]
                     img_result_seg.src_base64 = data.get("imagen_seg_base64", "")
                     img_result_depth.src_base64 = data.get("imagen_depth_base64", "")
+                    img_result_plano.src_base64 = data.get("imagen_plano_base64", "")
 
                     media_box_det.content = img_result_det
                     media_box_seg.content = img_result_seg
                     media_box_depth.content = img_result_depth
+                    media_box_plano.content = img_result_plano
 
                 images_row.visible = True
 

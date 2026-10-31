@@ -1,0 +1,5 @@
+path: c:\Users\luigu\OneDrive\Escritorio\Magnum_model_tool\segmentation_train
+train: images
+val: images
+names:
+  0: rejilla

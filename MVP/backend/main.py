@@ -19,6 +19,7 @@ from depth_utils import (
     extraer_profundidad_bbox,
     extraer_coordenadas_rejillas,
     obtener_profundidad_rejilla_knn_pura,
+    construir_imagen_poligonos_rejillas,
 )
 from video_utils import crear_panoramica_desde_video, procesar_video_con_modelos
 
@@ -115,7 +116,7 @@ async def predict(
             
         ancho, alto = pil_img.size
 
-        # 1. Detección principal (Bounding Boxes de productos)
+        # 1. Detección principal (Bounding Boxes / OBB de productos)
         resultado = model(pil_img, conf=0.25, device=YOLO_DEVICE)[0]
 
         # 2. Segmentación (Polígonos/Máscaras de rejilla)
@@ -181,28 +182,35 @@ async def predict(
         print(f"[{BUILD}] cajas={0 if cajas_det is None else len(cajas_det)} "
               f"productos={len(productos)} rejillas={len(rejillas)} CLASS_NAMES={len(CLASS_NAMES)}")
 
-        # 3. Obtención del mapa de profundidad en centímetros (cm)
+        # 3. Primer mapa de calor: Depth Anything sobre la imagen original (profundidad de productos)
         depth_cm = calcular_mapa_profundidad_cm(pil_img)
-        
-        # 4. Construcción del k-NN espacial para rejillas
+
+        # 4. Segundo mapa de calor: Crear imagen con polígonos delimitados por la segmentación YOLO de rejillas
+        #    y aplicarle Depth Anything para obtener la profundidad de referencia de las rejillas
+        pil_img_poligonos, _ = construir_imagen_poligonos_rejillas(pil_img, rejillas)
+        depth_plano_cm = calcular_mapa_profundidad_cm(pil_img_poligonos)
+
+        # 5. Construcción del índice espacial k-NN con las coordenadas de las rejillas detectadas
         knn_data = extraer_coordenadas_rejillas(rejillas, ancho, alto)
 
         detalle_detecciones = []
         resumen_por_sku = {}
 
-        # 5. Cálculo de faltantes en centímetros
+        # 6. Cálculo de faltantes restando la profundidad del producto (1er mapa) y el punto de referencia k=3 (2do mapa)
         for prod in productos:
             nombre_sku = prod["nombre"]
-            capacidad_max = resolver_capacidad_sku(nombre_sku)      
-            paso_profundidad_cm = resolver_paso_profundidad(nombre_sku) 
+            capacidad_max = resolver_capacidad_sku(nombre_sku, numero_serie=numero_serie)      
+            paso_profundidad_cm = resolver_paso_profundidad(nombre_sku, numero_serie=numero_serie) 
 
-            # Medición en cm
+            # Profundidad del producto desde el primer mapa de calor
             profundidad_sku = extraer_profundidad_bbox(depth_cm, prod)
+
+            # Profundidad de referencia (k=3 píxeles más cercanos) desde el segundo mapa de calor
             profundidad_rejilla = obtener_profundidad_rejilla_knn_pura(
-                depth_cm=depth_cm,
+                depth_cm=depth_plano_cm,
                 producto=prod,
                 knn_data=knn_data,
-                k=20
+                k=3
             )
 
             if profundidad_sku is None or profundidad_rejilla is None:
@@ -214,7 +222,6 @@ async def predict(
                 diferencia_cm = abs(profundidad_sku - profundidad_rejilla)
                 faltantes = int(round(diferencia_cm / max(paso_profundidad_cm, 1e-6)))
                 faltantes = int(np.clip(faltantes, 0, capacidad_max - 1))
-                
                 inventario_estimado = int(np.clip(capacidad_max - faltantes, 1, capacidad_max))
                 estado = "estimado_exitoso"
 
@@ -249,11 +256,13 @@ async def predict(
             resumen_por_sku[nombre_sku]["stock_estimado"] += inventario_estimado
 
         # Visualizaciones
+        # 1) YOLO OBB / Boxes
         anotada_bgr = resultado.plot(boxes=True, masks=False)
         buffer_det = io.BytesIO()
         Image.fromarray(anotada_bgr[:, :, ::-1]).save(buffer_det, format="JPEG", quality=90)
         imagen_base64 = base64.b64encode(buffer_det.getvalue()).decode("utf-8")
 
+        # 2) YOLO Segmentación de rejillas
         anotada_seg_bgr = resultado_seg.plot(
             boxes=False,
             masks=True,
@@ -264,14 +273,25 @@ async def predict(
         Image.fromarray(anotada_seg_bgr[:, :, ::-1]).save(buffer_seg, format="JPEG", quality=90)
         imagen_seg_base64 = base64.b64encode(buffer_seg.getvalue()).decode("utf-8")
 
-        # Generación y reversión visual del mapa de calor
+        # 3) Primer mapa de calor (Depth Anything sobre imagen original)
         depth_vis = cv2.normalize(depth_cm, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
         depth_vis_invertido = cv2.bitwise_not(depth_vis) 
-        
         depth_colored = cv2.applyColorMap(depth_vis_invertido, cv2.COLORMAP_INFERNO)
         buffer_depth = io.BytesIO()
         Image.fromarray(cv2.cvtColor(depth_colored, cv2.COLOR_BGR2RGB)).save(buffer_depth, format="JPEG", quality=90)
         imagen_depth_base64 = base64.b64encode(buffer_depth.getvalue()).decode("utf-8")
+
+        # 4) Segundo mapa de calor (Depth Anything sobre la imagen con polígonos delimitados por YOLO segmentación)
+        plano_vis = cv2.normalize(depth_plano_cm, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+        plano_vis_invertido = cv2.bitwise_not(plano_vis)
+        plano_colored = cv2.applyColorMap(plano_vis_invertido, cv2.COLORMAP_INFERNO)
+        buffer_plano = io.BytesIO()
+        Image.fromarray(cv2.cvtColor(plano_colored, cv2.COLOR_BGR2RGB)).save(buffer_plano, format="JPEG", quality=90)
+        imagen_plano_base64 = base64.b64encode(buffer_plano.getvalue()).decode("utf-8")
+
+        buffer_poly = io.BytesIO()
+        pil_img_poligonos.save(buffer_poly, format="JPEG", quality=90)
+        imagen_poligonos_base64 = base64.b64encode(buffer_poly.getvalue()).decode("utf-8")
 
         return {
             "status": "success",
@@ -280,6 +300,8 @@ async def predict(
             "imagen_base64": imagen_base64,
             "imagen_seg_base64": imagen_seg_base64,
             "imagen_depth_base64": imagen_depth_base64,
+            "imagen_plano_base64": imagen_plano_base64,
+            "imagen_poligonos_base64": imagen_poligonos_base64,
             "detecciones": list(resumen_por_sku.values()),
             "detalle_detecciones": detalle_detecciones,
             "total_skus_detectados": len(productos),

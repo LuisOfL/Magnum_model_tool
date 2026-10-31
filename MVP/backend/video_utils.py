@@ -143,6 +143,7 @@ def procesar_video_con_modelos(
     best_frame_det_bgr = None
     best_frame_seg_bgr = None
     best_frame_depth_bgr = None
+    best_frame_plano_bgr = None
 
     sku_max_visibles: Dict[str, int] = {}
     sku_best_estimados: Dict[str, int] = {}
@@ -240,7 +241,14 @@ def procesar_video_con_modelos(
                             "mask": mask
                         })
 
-            # Calcular estimación métrica con KNN para este frame
+            # Calcular estimación métrica con el segundo mapa de calor (polígonos de rejilla) y k=3
+            from depth_utils import construir_imagen_poligonos_rejillas
+            pil_frame_poligonos, _ = construir_imagen_poligonos_rejillas(pil_frame, rejillas_frame)
+            depth_plano_cm = depth_calc_func(pil_frame_poligonos)
+            plano_vis = cv2.normalize(depth_plano_cm, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+            plano_vis_inv = cv2.bitwise_not(plano_vis)
+            frame_plano_bgr = cv2.applyColorMap(plano_vis_inv, cv2.COLORMAP_INFERNO)
+
             knn_data = extraer_coordenadas_rejillas(rejillas_frame, width, height)
             detalles_frame = []
             sku_counts_this_frame: Dict[str, int] = {}
@@ -253,10 +261,10 @@ def procesar_video_con_modelos(
 
                 profundidad_sku = extraer_profundidad_bbox(depth_cm, prod)
                 profundidad_rejilla = obtener_profundidad_rejilla_knn_pura(
-                    depth_cm=depth_cm,
+                    depth_cm=depth_plano_cm,
                     producto=prod,
                     knn_data=knn_data,
-                    k=20
+                    k=3
                 )
 
                 if profundidad_sku is None or profundidad_rejilla is None:
@@ -307,6 +315,7 @@ def procesar_video_con_modelos(
                 best_frame_det_bgr = frame_det_bgr.copy()
                 best_frame_seg_bgr = frame_seg_bgr.copy()
                 best_frame_depth_bgr = frame_depth_bgr.copy()
+                best_frame_plano_bgr = frame_plano_bgr.copy()
 
     finally:
         cap.release()
@@ -327,6 +336,7 @@ def procesar_video_con_modelos(
     img_det_b64 = ""
     img_seg_b64 = ""
     img_depth_b64 = ""
+    img_plano_b64 = ""
     if best_frame_det_bgr is not None:
         buf = cv2.imencode(".jpg", best_frame_det_bgr)[1]
         img_det_b64 = base64.b64encode(buf.tobytes()).decode("utf-8")
@@ -336,6 +346,9 @@ def procesar_video_con_modelos(
     if best_frame_depth_bgr is not None:
         buf = cv2.imencode(".jpg", best_frame_depth_bgr)[1]
         img_depth_b64 = base64.b64encode(buf.tobytes()).decode("utf-8")
+    if best_frame_plano_bgr is not None:
+        buf = cv2.imencode(".jpg", best_frame_plano_bgr)[1]
+        img_plano_b64 = base64.b64encode(buf.tobytes()).decode("utf-8")
 
     # Resumen acumulado de inventario
     resumen_skus = []
@@ -359,6 +372,7 @@ def procesar_video_con_modelos(
         "imagen_base64": img_det_b64,
         "imagen_seg_base64": img_seg_b64,
         "imagen_depth_base64": img_depth_b64,
+        "imagen_plano_base64": img_plano_b64,
         "detecciones": resumen_skus,
         "detalle_detecciones": best_frame_details,
         "total_skus_detectados": sum(sku_max_visibles.values()),
